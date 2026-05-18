@@ -1,0 +1,48 @@
+name: food_detection
+description: "A new Flutter project."
+
+publish_to: 'none' 
+
+version: 1.0.0+1
+
+environment:
+  sdk: ^3.11.5
+
+dependencies:
+  flutter:
+    sdk: flutter
+  cupertino_icons: ^1.0.8
+  
+  # TensorFlow Lite
+  tflite_flutter: ^0.12.1
+  
+  # Ambil gambar dari kamera/gallery
+  image_picker: ^1.2.2
+  
+  # Untuk akses file
+  path_provider: ^2.1.5
+  
+  # Untuk manipulasi gambar
+  image: ^4.8.0
+
+  # Database untuk KNN
+  sqflite: ^2.0.0+4
+
+  path: ^1.9.1
+  
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+  flutter_launcher_icons: ^0.13.1
+
+flutter:
+  uses-material-design: true
+  assets:
+    - assets/food_indonesia_model.tflite
+    - assets/labels_indonesia.txt
+
+flutter_icons:
+  android: true
+  ios: true
+  image_path: "assets/images/logo.png"
