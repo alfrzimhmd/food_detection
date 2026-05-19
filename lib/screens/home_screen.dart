@@ -496,7 +496,7 @@ class _HomeScreenState extends State<HomeScreen>
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('✅ Model telah belajar bahwa gambar ini adalah:'),
+            Text('Model telah belajar bahwa gambar ini adalah:'),
             const SizedBox(height: 8),
             Container(
               padding: const EdgeInsets.all(8),

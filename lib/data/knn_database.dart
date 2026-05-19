@@ -1,6 +1,3 @@
-// ============================================================================
-// SIMPLE CORRECTION DATABASE - VERSI STABIL
-// ============================================================================
 import 'package:flutter/foundation.dart';
 import 'dart:async';
 import 'package:path_provider/path_provider.dart';
@@ -34,9 +31,9 @@ class SimpleCorrectionDatabase {
         onCreate: _onCreate,
         onUpgrade: _onUpgrade,
       );
-      debugPrint('✅ Database initialized at: $path');
+      debugPrint('Database initialized at: $path');
     } catch (e) {
-      debugPrint('❌ Database init error: $e');
+      debugPrint('Database init error: $e');
       rethrow;
     }
   }
@@ -54,16 +51,16 @@ class SimpleCorrectionDatabase {
     ''');
 
     await db.execute('CREATE INDEX IF NOT EXISTS idx_hash ON corrections(image_hash)');
-    debugPrint('✅ Database tables created');
+    debugPrint('Database tables created');
   }
 
   Future<void> _onUpgrade(Database db, int oldVersion, int newVersion) async {
     if (oldVersion < 2) {
       try {
         await db.execute('ALTER TABLE corrections ADD COLUMN updated_at INTEGER');
-        debugPrint('✅ Database upgraded to version $newVersion');
+        debugPrint('Database upgraded to version $newVersion');
       } catch (e) {
-        debugPrint('⚠️ Upgrade error (maybe column exists): $e');
+        debugPrint('Upgrade error (maybe column exists): $e');
       }
     }
   }
@@ -99,7 +96,7 @@ class SimpleCorrectionDatabase {
         where: 'image_hash = ?',
         whereArgs: [imageHash],
       );
-      debugPrint('📝 Updated: $imageHash → $label');
+      debugPrint('Updated: $imageHash → $label');
       return result;
     } else {
       final result = await db.insert(
@@ -113,7 +110,7 @@ class SimpleCorrectionDatabase {
         },
         conflictAlgorithm: ConflictAlgorithm.replace,
       );
-      debugPrint('📝 Inserted: $imageHash → $label');
+      debugPrint('Inserted: $imageHash → $label');
       return result;
     }
   }
@@ -131,7 +128,7 @@ class SimpleCorrectionDatabase {
       if (results.isNotEmpty) return results.first;
       return null;
     } catch (e) {
-      debugPrint('❌ findByHash error: $e');
+      debugPrint('findByHash error: $e');
       return null;
     }
   }
@@ -149,7 +146,7 @@ class SimpleCorrectionDatabase {
       final result = await db.rawQuery('SELECT COUNT(*) as count FROM corrections');
       return result.first['count'] as int;
     } catch (e) {
-      debugPrint('❌ getCount error: $e');
+      debugPrint('getCount error: $e');
       return 0;
     }
   }
@@ -158,14 +155,14 @@ class SimpleCorrectionDatabase {
   Future<void> deleteAll() async {
     final db = await database;
     await db.delete('corrections');
-    debugPrint('🗑️ All corrections deleted');
+    debugPrint('All corrections deleted');
   }
 
   // Delete by hash
   Future<void> deleteByHash(String imageHash) async {
     final db = await database;
     await db.delete('corrections', where: 'image_hash = ?', whereArgs: [imageHash]);
-    debugPrint('🗑️ Deleted: $imageHash');
+    debugPrint('Deleted: $imageHash');
   }
 
   // Close database

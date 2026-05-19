@@ -1,8 +1,5 @@
-// ============================================================================
-// HYBRID CLASSIFIER - CNN + SQLite Cache + Validasi Gambar (FINAL)
-// ============================================================================
-// 
-// Fitur:
+// HYBRID CLASSIFIER - CNN + SQLite Cache + Validasi Gambar :
+
 // 1. Deteksi makanan dengan CNN (MobileNetV2, 18 kelas)
 // 2. Cache koreksi user di SQLite (belajar dari kesalahan)
 // 3. Validasi gambar ringan (keburaman sampling, ukuran, format)
@@ -10,8 +7,6 @@
 // 5. Timeout untuk mencegah freeze
 // 6. Optimasi memory (resize gambar besar sebelum diproses)
 // 7. Blur detection dengan sampling (tidak semua pixel)
-//
-// ============================================================================
 
 import 'dart:math';
 
@@ -30,11 +25,11 @@ class HybridFoodClassifier {
   static const int numClasses = 18;
   
   // Threshold untuk validasi gambar
-  static const double nonFoodThreshold = 0.53;      // < 53% = bukan makanan
+  static const double nonFoodThreshold = 0.50;      // < 50% = bukan makanan
   static const double lowConfidenceThreshold = 0.70; // < 70% = warning
   
   // Threshold untuk deteksi keburaman
-  static const double blurThreshold = 300.0;         // < 300 = buram
+  static const double blurThreshold = 250.0;         // < 250 = buram
   
   // Threshold ukuran file
   static const int minFileSize = 5000;               // minimal 5KB
@@ -114,7 +109,7 @@ class HybridFoodClassifier {
   
   // ==================== VALIDASI GAMBAR (RINGAN) ====================
   
-  /// Deteksi keburaman dengan SAMPLING (jauh lebih cepat)
+  /// Deteksi keburaman dengan SAMPLING 
   double _calculateBlurrinessLight(img.Image image) {
     img.Image gray = img.grayscale(image);
     
