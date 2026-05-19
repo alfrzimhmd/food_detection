@@ -70,18 +70,38 @@ class _HomeScreenState extends State<HomeScreen>
   }
 
   Future<void> _pickImage(ImageSource source) async {
+    debugPrint('Memilih gambar dari ${source == ImageSource.camera ? "KAMERA" : "GALERI"}');
     try {
       final XFile? pickedFile = await _picker.pickImage(
         source: source,
-        imageQuality: 80,
+        imageQuality: 50,           // Kompresi 50% (lebih kecil dari 80)
+        maxWidth: 1024,             // Maksimal lebar 1024px (turun dari sebelumnya)
+        maxHeight: 1024,            // Maksimal tinggi 1024px
       );
+      
       if (pickedFile != null) {
+        // ==================== TAMBAHAN: CEK UKURAN FILE ====================
+        final fileSize = await pickedFile.length();
+        final fileSizeInMB = fileSize / (1024 * 1024);
+        debugPrint('File size: ${fileSizeInMB.toStringAsFixed(2)} MB');
+        
+        // Jika file masih terlalu besar (> 3MB), tolak
+        if (fileSize > 3 * 1024 * 1024) {
+          _showSnackBar('Gambar terlalu besar (${fileSizeInMB.toStringAsFixed(1)}MB). Maksimal 3MB.', Colors.orange);
+          return;
+        }
+        // ================================================================
+        
         setState(() {
           _selectedImage = File(pickedFile.path);
           _predictionResult = null;
           _processingStep = 0;
         });
         _animationController.reset();
+        
+        debugPrint('Gambar dipilih: ${pickedFile.path}');
+      } else {
+        debugPrint('Tidak ada gambar yang dipilih');
       }
     } catch (e) {
       debugPrint('Error picking image: $e');
@@ -98,40 +118,107 @@ class _HomeScreenState extends State<HomeScreen>
     
     setState(() {
       _isPredicting = true;
-      _processingStep = 1; // Step 1: Membaca gambar
+      _processingStep = 1;
     });
     
     try {
-      // Step 1 — membaca gambar (delay untuk animasi)
-      await Future.delayed(const Duration(milliseconds: 600));
-      setState(() => _processingStep = 2); // Step 2: Menganalisa
+      // Step 1 — membaca gambar (delay minimal untuk animasi)
+      await Future.delayed(const Duration(milliseconds: 300));
+      if (!mounted) return;
+      setState(() => _processingStep = 2);
 
       List<int> imageBytes = await _selectedImage!.readAsBytes();
 
-      // Step 2 — menganalisa (delay untuk animasi)
-      await Future.delayed(const Duration(milliseconds: 700));
-      setState(() => _processingStep = 3); // Step 3: Memprediksi
+      // Step 2 — menganalisa
+      await Future.delayed(const Duration(milliseconds: 300));
+      if (!mounted) return;
+      setState(() => _processingStep = 3);
 
-      // Step 3 — prediksi
-      Prediction prediction = await _classifier.predict(imageBytes);
-
+      // Step 3 — prediksi dengan timeout
+      final prediction = await _classifier.predictWithTimeout(imageBytes);
+      
+      if (!mounted) return;
+      
       setState(() {
         _predictionResult = prediction;
         _isPredicting = false;
         _processingStep = 0;
       });
-      _animationController.forward();
+      
+      // Handle error
+      if (prediction.hasError) {
+        if (prediction.isNotFood) {
+          _showNotFoodDialog();
+        } else {
+          _showErrorDialog(prediction.errorMessage!);
+        }
+        _resetAll();
+      } else {
+        _animationController.forward();
+      }
       
     } catch (e) {
       debugPrint('Error predicting: $e');
-      _showSnackBar('Gagal memprediksi gambar', Colors.red);
-      setState(() {
-        _isPredicting = false;
-        _processingStep = 0;
-      });
+      if (mounted) {
+        _showErrorDialog('Terjadi kesalahan. Silakan coba lagi.');
+        setState(() {
+          _isPredicting = false;
+          _processingStep = 0;
+          _predictionResult = null;
+        });
+      }
     }
   }
 
+  void _showErrorDialog(String message) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: Row(
+          children: [
+            Icon(Icons.error_outline, color: Colors.red.shade700),
+            const SizedBox(width: 10),
+            const Text('Gagal Mendeteksi'),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(message),
+            const SizedBox(height: 16),
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.amber.shade50,
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Row(
+                children: [
+                  Icon(Icons.lightbulb_outline, size: 18, color: Colors.amber.shade700),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'Tips: Pastikan foto makanan terlihat jelas, pencahayaan cukup, dan fokus kamera tepat.',
+                      style: TextStyle(fontSize: 12, color: Colors.amber.shade800),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('OK'),
+          ),
+        ],
+      ),
+    );
+  }
+  
   void _resetAll() {
     _animationController.reset();
     setState(() {
@@ -152,8 +239,86 @@ class _HomeScreenState extends State<HomeScreen>
     );
   }
 
+  void _showNotFoodDialog() {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: Row(
+          children: [
+            Icon(Icons.restaurant_rounded, color: Colors.orange.shade700),
+            const SizedBox(width: 10),
+            const Text('Bukan Makanan'),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text('Gambar yang Anda unggah tidak dikenali sebagai makanan.'),
+            const SizedBox(height: 16),
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.green.shade50,
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Row(
+                children: [
+                  Icon(Icons.photo_camera, size: 18, color: Colors.green.shade700),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'Tips: Ambil foto makanan dengan pencahayaan cukup, fokus tepat, dan usahakan makanan terlihat jelas.',
+                      style: TextStyle(fontSize: 12, color: Colors.green.shade800),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 12),
+            Text(
+              'Contoh makanan yang dapat dideteksi:',
+              style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 8),
+            Wrap(
+              spacing: 8,
+              children: [
+                '🍳 Nasi Goreng', '🍜 Mie Goreng', '🥩 Rendang', '🍢 Sate',
+                '🍲 Bakso', '🍵 Soto', '🍗 Ayam Goreng', '🐟 Ikan Goreng'
+              ].map((item) => Chip(
+                label: Text(item, style: const TextStyle(fontSize: 11)),
+                backgroundColor: Colors.green.shade50,
+              )).toList(),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('OK'),
+          ),
+        ],
+      ),
+    );
+  }
+
   // ==================== DIALOG KOREKSI ====================
   void _showCorrectionDialog() {
+
+  // Jangan tampilkan dialog jika hasil error atau bukan makanan
+  if (_predictionResult == null || _predictionResult!.hasError) {
+    _showSnackBar('Tidak dapat mengoreksi gambar yang tidak valid.', Colors.orange);
+    return;
+  }
+  
+  // Jangan tampilkan dialog jika confidence terlalu rendah (< 45%)
+  if (_predictionResult!.probability < 0.45 && !_predictionResult!.isFromCache) {
+    _showSnackBar('Keyakinan terlalu rendah. Coba foto ulang dengan pencahayaan lebih baik.', Colors.orange);
+    return;
+  }
+
     final List<String> foodLabels = _classifier.labels;
 
     showModalBottomSheet(
@@ -297,6 +462,12 @@ class _HomeScreenState extends State<HomeScreen>
   // ==================== MENYIMPAN FEEDBACK ====================
   Future<void> _saveFeedback(String correctLabel) async {
     if (_selectedImage == null || _predictionResult == null) return;
+
+    // Jangan simpan feedback untuk gambar error
+    if (_predictionResult!.hasError) {
+      _showSnackBar('Tidak dapat menyimpan koreksi untuk gambar yang tidak valid.', Colors.orange);
+      return;
+    }
     
     _showSnackBar('Menyimpan koreksi...', Colors.blue);
     
@@ -982,7 +1153,7 @@ class _HomeScreenState extends State<HomeScreen>
 
                 // Nutrisi Grid
                 const Text('Nutrisi per 100g', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF1B5E20))),
-                const SizedBox(height: 12),
+                const SizedBox(height: 2),
                 GridView.count(
                   shrinkWrap: true,
                   physics: const NeverScrollableScrollPhysics(),
@@ -999,12 +1170,6 @@ class _HomeScreenState extends State<HomeScreen>
                     _buildNutrientTile(icon: Icons.science_rounded, label: 'Sodium', value: foodData.sodium.toStringAsFixed(0), unit: 'mg', accentColor: const Color(0xFF6A1B9A)),
                   ],
                 ),
-                const SizedBox(height: 20),
-
-                // Sodium Progress Bar
-                _buildSodiumBar(foodData),
-                const SizedBox(height: 20),
-
                 // Tips & Peringatan
                 const Text('Info Kesehatan', style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Color(0xFF1B5E20))),
                 const SizedBox(height: 10),
@@ -1121,53 +1286,6 @@ class _HomeScreenState extends State<HomeScreen>
           ),
           const SizedBox(height: 3),
           Text(label, style: TextStyle(fontSize: 10, color: Colors.grey.shade600, fontWeight: FontWeight.w500)),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildSodiumBar(dynamic foodData) {
-    final sodiumVal = (foodData.sodium as double).clamp(0, 2000);
-    final pct = sodiumVal / 2000;
-    final barColor = sodiumVal > 1000 ? const Color(0xFFD32F2F) : const Color(0xFF2E7D32);
-
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.grey.shade50,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.grey.shade200),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Icon(Icons.water_drop_rounded, size: 16, color: Colors.purple.shade600),
-              const SizedBox(width: 6),
-              Text('Kandungan Sodium', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Colors.grey.shade700)),
-              const Spacer(),
-              Text('${foodData.sodium.toStringAsFixed(0)} mg', style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: barColor)),
-            ],
-          ),
-          const SizedBox(height: 10),
-          ClipRRect(
-            borderRadius: BorderRadius.circular(8),
-            child: LinearProgressIndicator(
-              value: pct.clamp(0.0, 1.0),
-              backgroundColor: Colors.grey.shade200,
-              color: barColor,
-              minHeight: 8,
-            ),
-          ),
-          const SizedBox(height: 6),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text('0 mg', style: TextStyle(fontSize: 10, color: Colors.grey.shade500)),
-              Text('Batas harian: 2000 mg', style: TextStyle(fontSize: 10, color: Colors.grey.shade500)),
-            ],
-          ),
         ],
       ),
     );
