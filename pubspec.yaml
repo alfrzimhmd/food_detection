@@ -41,6 +41,7 @@ flutter:
   assets:
     - assets/food_indonesia_model.tflite
     - assets/labels_indonesia.txt
+    - assets/images/logo.png
 
 flutter_icons:
   android: true
