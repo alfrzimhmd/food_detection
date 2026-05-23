@@ -1,7 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'home_screen.dart';
+import '../data/database_manager.dart';
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
@@ -25,14 +25,14 @@ class _SplashScreenState extends State<SplashScreen>
   late AnimationController _textController;
   late Animation<double> _textFadeAnimation;
   
+  final DatabaseManager _dbManager = DatabaseManager();
+
   @override
   void initState() {
     super.initState();
     
-    // Sembunyikan status bar untuk splash screen yang lebih imersif
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
     
-    // Animasi skala untuk logo (membesar lalu mengecil sedikit)
     _scaleController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 1200),
@@ -44,7 +44,6 @@ class _SplashScreenState extends State<SplashScreen>
       ),
     );
     
-    // Animasi fade untuk background gradient
     _fadeController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 800),
@@ -56,7 +55,6 @@ class _SplashScreenState extends State<SplashScreen>
       ),
     );
     
-    // Animasi rotasi untuk loading indicator
     _rotationController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 1500),
@@ -69,7 +67,6 @@ class _SplashScreenState extends State<SplashScreen>
     );
     _rotationController.repeat();
     
-    // Animasi fade untuk teks
     _textController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 600),
@@ -81,24 +78,34 @@ class _SplashScreenState extends State<SplashScreen>
       ),
     );
     
-    // Mulai animasi
     _scaleController.forward();
     _fadeController.forward();
     _textController.forward();
     
-    // Delay beberapa detik lalu navigasi ke halaman utama
-    Timer(const Duration(milliseconds: 3000), _navigateToHome);
+    _navigateToNextScreen();
   }
   
-  void _navigateToHome() {
-    SystemChrome.setEnabledSystemUIMode(SystemUiMode.manual,
-      overlays: [SystemUiOverlay.top, SystemUiOverlay.bottom],
-    );
+  Future<void> _navigateToNextScreen() async {
+    // Tunggu 2.5 detik untuk animasi splash screen
+    await Future.delayed(const Duration(milliseconds: 2500));
     
-    Navigator.pushReplacement(
-      context,
-      MaterialPageRoute(builder: (context) => const HomeScreen()),
-    );
+    // Cek apakah user sudah memiliki profile
+    final userProfile = await _dbManager.getUserProfile();
+    final hasUserProfile = userProfile != null;
+    
+    if (mounted) {
+      SystemChrome.setEnabledSystemUIMode(SystemUiMode.manual,
+        overlays: [SystemUiOverlay.top, SystemUiOverlay.bottom],
+      );
+      
+      if (hasUserProfile) {
+        // User sudah pernah onboarding, langsung ke MainPage
+        Navigator.pushReplacementNamed(context, '/main');
+      } else {
+        // User belum onboarding, ke OnboardingScreen
+        Navigator.pushReplacementNamed(context, '/onboarding');
+      }
+    }
   }
   
   @override
@@ -134,6 +141,7 @@ class _SplashScreenState extends State<SplashScreen>
               ),
               child: Stack(
                 children: [
+                  // Dekorasi lingkaran latar belakang
                   Positioned(
                     top: -100,
                     right: -100,
@@ -188,14 +196,15 @@ class _SplashScreenState extends State<SplashScreen>
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
+                        // Logo dengan animasi skala
                         AnimatedBuilder(
                           animation: _scaleController,
                           builder: (context, child) {
                             return Transform.scale(
                               scale: _scaleAnimation.value,
                               child: Container(
-                                width: 140,
-                                height: 140,
+                                width: 120,
+                                height: 120,
                                 decoration: BoxDecoration(
                                   shape: BoxShape.circle,
                                   color: Colors.white,
@@ -209,17 +218,16 @@ class _SplashScreenState extends State<SplashScreen>
                                 ),
                                 child: ClipOval(
                                   child: Image.asset(
-                                    'assets/images/logo.png',
-                                    width: 150,
-                                    height: 150,
+                                    'assets/images/logoapk.png',
+                                    width: 120,
+                                    height: 120,
                                     fit: BoxFit.cover,
                                     errorBuilder: (context, error, stackTrace) {
-                                      // Fallback jika logo tidak ditemukan
                                       return Container(
                                         color: Colors.white,
                                         child: const Icon(
                                           Icons.restaurant,
-                                          size: 70,
+                                          size: 60,
                                           color: Color(0xFF2E7D32),
                                         ),
                                       );
@@ -272,7 +280,7 @@ class _SplashScreenState extends State<SplashScreen>
                           },
                         ),
                         
-                        const SizedBox(height: 50),
+                        const SizedBox(height: 80),
                         
                         // Loading indicator dengan animasi rotasi
                         RotationTransition(

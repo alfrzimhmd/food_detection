@@ -14,15 +14,15 @@ import 'package:flutter/foundation.dart';
 import 'package:tflite_flutter/tflite_flutter.dart';
 import 'package:image/image.dart' as img;
 import 'package:flutter/services.dart';
-import '../data/knn_database.dart';
+import '../data/database_manager.dart';
 
 class HybridFoodClassifier {
   late Interpreter _cnnModel;
   late List<String> _labels;
-  late SimpleCorrectionDatabase _db;
+  late DatabaseManager _db;
   
   // ==================== KONSTANTA ====================
-  static const int numClasses = 18;
+  static const int numClasses = 19;
   
   // Threshold untuk validasi gambar
   static const double nonFoodThreshold = 0.50;      // < 50% = bukan makanan
@@ -57,10 +57,10 @@ class HybridFoodClassifier {
       _labels = _labels.where((label) => label.trim().isNotEmpty).toList();
       debugPrint('Labels loaded: ${_labels.length} classes');
       
-      _db = SimpleCorrectionDatabase();
+      _db = DatabaseManager();
       await _db.init();
       
-      final count = await _db.getCount();
+      final count = await _db.getCorrectionsCount();
       debugPrint('Correction cache loaded: $count entries');
       
     } catch (e) {
@@ -92,7 +92,7 @@ class HybridFoodClassifier {
       double scale = maxImageDimensionForProcessing / max(image.width, image.height);
       targetWidth = (image.width * scale).toInt();
       targetHeight = (image.height * scale).toInt();
-      debugPrint('Resize: ${image.width}x${image.height} → ${targetWidth}x${targetHeight}');
+      debugPrint('Resize: ${image.width}x${image.height} → ${targetWidth}x$targetHeight');
       return img.copyResize(image, width: targetWidth, height: targetHeight);
     }
     
@@ -394,7 +394,7 @@ class HybridFoodClassifier {
         originalPrediction: originalPrediction,
       );
       
-      final count = await _db.getCount();
+      final count = await _db.getCorrectionsCount();
       debugPrint('Learned! Cache size: $count');
       
     } catch (e) {
@@ -408,14 +408,14 @@ class HybridFoodClassifier {
   
   Future<int> getCacheSize() async {
     try {
-      return await _db.getCount();
+      return await _db.getCorrectionsCount();
     } catch (e) {
       return 0;
     }
   }
   
   Future<void> resetCache() async {
-    await _db.deleteAll();
+    await _db.deleteAllCorrections();
   }
   
   void dispose() {

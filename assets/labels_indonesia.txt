@@ -1,13 +1,14 @@
 ayam_goreng
 bakso
 burger
-french_fries
 gado_gado
 gudeg
 gulai_ikan
 ikan_goreng
-mie_goreng
+kentang_goreng
+mie
 nasi_goreng
+nasi_padang
 pempek
 pizza
 rawon
