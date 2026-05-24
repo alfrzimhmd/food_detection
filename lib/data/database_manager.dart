@@ -7,136 +7,94 @@ import 'package:shared_preferences/shared_preferences.dart';
 class DatabaseManager {
   static final DatabaseManager _instance = DatabaseManager._internal();
   static Database? _database;
-  static bool _isInitialized = false;  // ← Tambahkan flag
+  static bool _isInitializing = false;
+  static final ChangeNotifier databaseUpdateNotifier = ChangeNotifier();
 
   DatabaseManager._internal();
 
   factory DatabaseManager() => _instance;
 
+    // ─── Method init untuk inisialisasi awal ───────────────────
+  Future<void> init() async {
+    debugPrint('🔵 DatabaseManager.init() dipanggil');
+    await _initDatabase();
+    debugPrint('✅ DatabaseManager.init() selesai');
+  }
+
+  // ─── Getter database dengan thread safety ───────────────────
   Future<Database> get database async {
-    // Cek apakah database valid dan terbuka
     if (_database != null && _database!.isOpen) {
       return _database!;
     }
-    await init();
-    return _database!;
+    return await _initDatabase();
   }
 
-  Future<void> init() async {
-    // Cek apakah sudah terinisialisasi dan database terbuka
-    if (_isInitialized && _database != null && _database!.isOpen) {
-      return;
+  // ─── Inisialisasi database ──────────────────────────────────
+  Future<Database> _initDatabase() async {
+    // Cegah inisialisasi ganda
+    if (_isInitializing) {
+      debugPrint('⏳ Database sedang diinisialisasi, menunggu...');
+      int waitCount = 0;
+      while (_isInitializing && waitCount < 50) {
+        await Future.delayed(const Duration(milliseconds: 50));
+        waitCount++;
+      }
+      if (_database != null && _database!.isOpen) {
+        debugPrint('✅ Database sudah siap setelah menunggu');
+        return _database!;
+      }
     }
-    
+
+    _isInitializing = true;
+    debugPrint('🔵 Memulai inisialisasi database...');
+
     try {
       final directory = await getApplicationDocumentsDirectory();
       final path = join(directory.path, 'food_detection.db');
+      debugPrint('📂 Path database: $path');
 
+      // Buka database (tanpa PRAGMA yang bermasalah)
       _database = await openDatabase(
         path,
-        version: 3,
+        version: 1, // Versi 1, tanpa upgrade complexity
         onCreate: _onCreate,
-        onUpgrade: _onUpgrade,
+        // Tidak ada onUpgrade karena kita selalu fresh install
       );
-      _isInitialized = true;
-      debugPrint('DatabaseManager initialized at: $path');
+
+      debugPrint('✅ Database berhasil dibuka (versi 1)');
+      return _database!;
+      
     } catch (e) {
-      debugPrint('DatabaseManager init error: $e');
+      debugPrint('❌ ERROR inisialisasi database: $e');
+      _database = null;
       rethrow;
+    } finally {
+      _isInitializing = false;
+      debugPrint('🔵 Inisialisasi database selesai');
     }
   }
 
-  // ============================================================
-  // MEMBUAT SEMUA TABEL SAAT PERTAMA KALI
-  // ============================================================
-  
+  // ─── Membuat semua tabel dari awal (versi 1) ────────────────
   Future<void> _onCreate(Database db, int version) async {
-    // Tabel 1: KNN Corrections (untuk pembelajaran model)
-    await db.execute('''
-      CREATE TABLE corrections(
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        image_hash TEXT UNIQUE,
-        label TEXT NOT NULL,
-        original_prediction TEXT,
-        created_at INTEGER,
-        updated_at INTEGER
-      )
-    ''');
+    debugPrint('📦 Membuat database versi $version dari awal...');
     
-    // Tabel 2: User Profile (target nutrisi user)
-    await db.execute('''
-      CREATE TABLE user_profile(
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        name TEXT NOT NULL,
-        target_calories INTEGER DEFAULT 2000,
-        target_protein REAL DEFAULT 50,
-        target_carbs REAL DEFAULT 250,
-        target_fat REAL DEFAULT 65,
-        created_at INTEGER,
-        updated_at INTEGER
-      )
-    ''');
-    
-    // Tabel 3: Scan History (riwayat deteksi makanan)
-    await db.execute('''
-      CREATE TABLE scan_history(
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        image_path TEXT NOT NULL,
-        label TEXT NOT NULL,
-        indonesian_name TEXT NOT NULL,
-        calories INTEGER NOT NULL,
-        protein REAL NOT NULL,
-        carbs REAL NOT NULL,
-        fat REAL NOT NULL,
-        fiber REAL,
-        sugar REAL,
-        sodium REAL,
-        health_level TEXT,
-        health_tip TEXT,
-        warning TEXT,
-        scanned_at INTEGER NOT NULL
-      )
-    ''');
-    
-    // Tabel 4: Daily Progress (ringkasan harian, opsional)
-    await db.execute('''
-      CREATE TABLE daily_progress(
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        date TEXT UNIQUE,
-        total_calories INTEGER DEFAULT 0,
-        total_protein REAL DEFAULT 0,
-        total_carbs REAL DEFAULT 0,
-        total_fat REAL DEFAULT 0,
-        updated_at INTEGER
-      )
-    ''');
-    
-    // Membuat index untuk mempercepat query
-    await db.execute('CREATE INDEX IF NOT EXISTS idx_corrections_hash ON corrections(image_hash)');
-    await db.execute('CREATE INDEX IF NOT EXISTS idx_scan_history_date ON scan_history(scanned_at)');
-    
-    debugPrint('All tables created successfully');
-  }
-
-  // Upgrade database jika ada perubahan struktur
-  Future<void> _onUpgrade(Database db, int oldVersion, int newVersion) async {
-    debugPrint('Upgrading database from version $oldVersion to $newVersion');
-    
-    if (oldVersion < 2) {
-      // Upgrade untuk menambah kolom updated_at di corrections
-      try {
-        await db.execute('ALTER TABLE corrections ADD COLUMN updated_at INTEGER');
-        debugPrint('Added updated_at column to corrections');
-      } catch (e) {
-        debugPrint('Upgrade error: $e');
-      }
-    }
-    
-    if (oldVersion < 3) {
-      // Upgrade untuk menambah tabel baru
-      // Tabel user_profile
+    try {
+      // 1. Tabel corrections untuk koreksi KNN
       await db.execute('''
-        CREATE TABLE IF NOT EXISTS user_profile(
+        CREATE TABLE corrections(
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          image_hash TEXT UNIQUE,
+          label TEXT NOT NULL,
+          original_prediction TEXT,
+          created_at INTEGER,
+          updated_at INTEGER
+        )
+      ''');
+      debugPrint('✅ Tabel corrections dibuat');
+
+      // 2. Tabel user_profile
+      await db.execute('''
+        CREATE TABLE user_profile(
           id INTEGER PRIMARY KEY AUTOINCREMENT,
           name TEXT NOT NULL,
           target_calories INTEGER DEFAULT 2000,
@@ -147,10 +105,11 @@ class DatabaseManager {
           updated_at INTEGER
         )
       ''');
-      
-      // Tabel scan_history
+      debugPrint('✅ Tabel user_profile dibuat');
+
+      // 3. Tabel scan_history (semua kolom lengkap)
       await db.execute('''
-        CREATE TABLE IF NOT EXISTS scan_history(
+        CREATE TABLE scan_history(
           id INTEGER PRIMARY KEY AUTOINCREMENT,
           image_path TEXT NOT NULL,
           label TEXT NOT NULL,
@@ -159,19 +118,20 @@ class DatabaseManager {
           protein REAL NOT NULL,
           carbs REAL NOT NULL,
           fat REAL NOT NULL,
-          fiber REAL,
-          sugar REAL,
-          sodium REAL,
+          fiber REAL DEFAULT 0,
+          sugar REAL DEFAULT 0,
+          sodium REAL DEFAULT 0,
           health_level TEXT,
           health_tip TEXT,
           warning TEXT,
           scanned_at INTEGER NOT NULL
         )
       ''');
-      
-      // Tabel daily_progress
+      debugPrint('✅ Tabel scan_history dibuat');
+
+      // 4. Tabel daily_progress
       await db.execute('''
-        CREATE TABLE IF NOT EXISTS daily_progress(
+        CREATE TABLE daily_progress(
           id INTEGER PRIMARY KEY AUTOINCREMENT,
           date TEXT UNIQUE,
           total_calories INTEGER DEFAULT 0,
@@ -181,48 +141,99 @@ class DatabaseManager {
           updated_at INTEGER
         )
       ''');
+      debugPrint('✅ Tabel daily_progress dibuat');
+
+      // Index untuk performa query
+      await db.execute('CREATE INDEX idx_corrections_hash ON corrections(image_hash)');
+      await db.execute('CREATE INDEX idx_scan_history_date ON scan_history(scanned_at)');
+      debugPrint('✅ Index-index berhasil dibuat');
+
+      // Insert default user profile
+      final now = DateTime.now().millisecondsSinceEpoch;
+      await db.insert('user_profile', {
+        'name': 'Pengguna',
+        'target_calories': 2000,
+        'target_protein': 50,
+        'target_carbs': 250,
+        'target_fat': 65,
+        'created_at': now,
+        'updated_at': now,
+      });
+      debugPrint('✅ Default user_profile ditambahkan');
+
+      debugPrint('🎉 Semua tabel berhasil dibuat!');
       
-      await db.execute('CREATE INDEX IF NOT EXISTS idx_scan_history_date ON scan_history(scanned_at)');
-      debugPrint('Tables created during upgrade');
+    } catch (e) {
+      debugPrint('❌ ERROR saat membuat tabel: $e');
+      rethrow;
     }
   }
 
-  // ============================================================
-  // 1. KNN CORRECTIONS (untuk pembelajaran model)
-  // ============================================================
+  // ─── Helper untuk safe data conversion ─────────────────────
+  Map<String, dynamic> _safeRow(Map<String, dynamic> row) {
+    final safe = <String, dynamic>{};
+    for (final entry in row.entries) {
+      final key = entry.key;
+      final value = entry.value;
+      
+      if (value == null) {
+        // Default values berdasarkan tipe data
+        if (key == 'calories' || key == 'id' || key == 'scanned_at' || 
+            key == 'target_calories') {
+          safe[key] = 0;
+        } else if (key == 'protein' || key == 'carbs' || key == 'fat' || 
+                   key == 'fiber' || key == 'sugar' || key == 'sodium' ||
+                   key == 'target_protein' || key == 'target_carbs' || key == 'target_fat') {
+          safe[key] = 0.0;
+        } else {
+          safe[key] = '';
+        }
+      } else {
+        safe[key] = value;
+      }
+    }
+    return safe;
+  }
 
-  // Compute hash konsisten
+  List<Map<String, dynamic>> _safeRows(List<Map<String, dynamic>> rows) {
+    return rows.map(_safeRow).toList();
+  }
+
+  // ─── 1. KNN Corrections ────────────────────────────────────
+  
   String computeConsistentHash(List<int> imageBytes) {
+    debugPrint('🔵 Menghitung hash untuk ${imageBytes.length} bytes');
     var hash = 0;
     for (int i = 0; i < imageBytes.length; i++) {
       hash = (hash * 31 + imageBytes[i]) & 0xFFFFFFFF;
     }
-    return hash.toRadixString(16).padLeft(8, '0');
+    final result = hash.toRadixString(16).padLeft(8, '0');
+    debugPrint('✅ Hash: $result');
+    return result;
   }
 
-  // Insert or Update correction
   Future<int> insertOrUpdateCorrection({
     required String imageHash,
     required String label,
     required String originalPrediction,
   }) async {
+    debugPrint('🔵 insertOrUpdateCorrection: hash=$imageHash, label=$label');
     final db = await database;
     final now = DateTime.now().millisecondsSinceEpoch;
-    
     final existing = await findByHash(imageHash);
-    
+
     if (existing != null) {
       final result = await db.update(
         'corrections',
         {
           'label': label,
           'original_prediction': originalPrediction,
-          'updated_at': now,
+          'updated_at': now
         },
         where: 'image_hash = ?',
         whereArgs: [imageHash],
       );
-      debugPrint('Updated correction: $imageHash → $label');
+      debugPrint('✅ Correction diUPDATE: $imageHash → $label');
       return result;
     } else {
       final result = await db.insert(
@@ -236,63 +247,82 @@ class DatabaseManager {
         },
         conflictAlgorithm: ConflictAlgorithm.replace,
       );
-      debugPrint('Inserted correction: $imageHash → $label');
+      debugPrint('✅ Correction diINSERT: $imageHash → $label');
       return result;
     }
   }
 
-  // Find correction by hash
   Future<Map<String, dynamic>?> findByHash(String imageHash) async {
+    debugPrint('🔵 findByHash: $imageHash');
     try {
       final db = await database;
-      final List<Map<String, dynamic>> results = await db.query(
+      final results = await db.query(
         'corrections',
         where: 'image_hash = ?',
         whereArgs: [imageHash],
       );
-      if (results.isNotEmpty) return results.first;
+      if (results.isNotEmpty) {
+        debugPrint('✅ Ditemukan correction untuk hash $imageHash');
+        return _safeRow(results.first);
+      }
+      debugPrint('⚠️ Tidak ditemukan correction untuk hash $imageHash');
       return null;
     } catch (e) {
-      debugPrint('findByHash error: $e');
+      debugPrint('❌ findByHash error: $e');
       return null;
     }
   }
 
-  // Get all corrections
   Future<List<Map<String, dynamic>>> getAllCorrections() async {
-    final db = await database;
-    return await db.query('corrections', orderBy: 'created_at DESC');
+    debugPrint('🔵 getAllCorrections');
+    try {
+      final db = await database;
+      final rows = await db.query('corrections', orderBy: 'created_at DESC');
+      debugPrint('✅ Mendapatkan ${rows.length} corrections');
+      return _safeRows(rows);
+    } catch (e) {
+      debugPrint('❌ getAllCorrections error: $e');
+      return [];
+    }
   }
 
-  // Get corrections count
   Future<int> getCorrectionsCount() async {
+    debugPrint('🔵 getCorrectionsCount');
     try {
       final db = await database;
       final result = await db.rawQuery('SELECT COUNT(*) as count FROM corrections');
-      return result.first['count'] as int;
+      final count = result.first['count'] as int? ?? 0;
+      debugPrint('✅ Total corrections: $count');
+      return count;
     } catch (e) {
-      debugPrint('getCorrectionsCount error: $e');
+      debugPrint('❌ getCorrectionsCount error: $e');
       return 0;
     }
   }
 
-  // Delete all corrections
   Future<void> deleteAllCorrections() async {
-    final db = await database;
-    await db.delete('corrections');
-    debugPrint('All corrections deleted');
+    debugPrint('🔵 deleteAllCorrections');
+    try {
+      final db = await database;
+      await db.delete('corrections');
+      debugPrint('✅ Semua corrections dihapus');
+    } catch (e) {
+      debugPrint('❌ deleteAllCorrections error: $e');
+    }
   }
 
-  // Delete correction by hash
   Future<void> deleteCorrectionByHash(String imageHash) async {
-    final db = await database;
-    await db.delete('corrections', where: 'image_hash = ?', whereArgs: [imageHash]);
-    debugPrint('Deleted correction: $imageHash');
+    debugPrint('🔵 deleteCorrectionByHash: $imageHash');
+    try {
+      final db = await database;
+      await db.delete('corrections', where: 'image_hash = ?', whereArgs: [imageHash]);
+      debugPrint('✅ Correction dihapus: $imageHash');
+    } catch (e) {
+      debugPrint('❌ deleteCorrectionByHash error: $e');
+    }
   }
 
-  // ============================================================
-  // 2. USER PROFILE (target nutrisi)
-  // ============================================================
+  // ─── 2. User Profile ───────────────────────────────────────
 
   Future<void> saveUserProfile({
     required String name,
@@ -301,15 +331,13 @@ class DatabaseManager {
     required double targetCarbs,
     required double targetFat,
   }) async {
+    debugPrint('🔵 saveUserProfile: name=$name, calories=$targetCalories');
     final db = await database;
     final now = DateTime.now().millisecondsSinceEpoch;
-    
-    // Cek apakah sudah ada profile
     final existing = await getUserProfile();
-    
+
     try {
       if (existing != null) {
-        // Update
         await db.update(
           'user_profile',
           {
@@ -323,57 +351,52 @@ class DatabaseManager {
           where: 'id = ?',
           whereArgs: [existing['id']],
         );
-        debugPrint('User profile updated: $name');
+        debugPrint('✅ User profile diUPDATE: $name');
       } else {
-        // Insert
-        await db.insert(
-          'user_profile',
-          {
-            'name': name,
-            'target_calories': targetCalories,
-            'target_protein': targetProtein,
-            'target_carbs': targetCarbs,
-            'target_fat': targetFat,
-            'created_at': now,
-            'updated_at': now,
-          },
-        );
-        debugPrint('User profile created: $name');
+        await db.insert('user_profile', {
+          'name': name,
+          'target_calories': targetCalories,
+          'target_protein': targetProtein,
+          'target_carbs': targetCarbs,
+          'target_fat': targetFat,
+          'created_at': now,
+          'updated_at': now,
+        });
+        debugPrint('✅ User profile diINSERT: $name');
       }
-      
-      // Set onboarding completed setelah save sukses
       await setOnboardingCompleted(true);
-      
     } catch (e) {
-      debugPrint('Error saving user profile: $e');
+      debugPrint('❌ saveUserProfile error: $e');
       rethrow;
     }
   }
 
-  // Get user profile
   Future<Map<String, dynamic>?> getUserProfile() async {
+    debugPrint('🔵 getUserProfile');
     try {
       final db = await database;
-      final List<Map<String, dynamic>> results = await db.query('user_profile');
-      if (results.isNotEmpty) return results.first;
+      final results = await db.query('user_profile', limit: 1);
+      if (results.isNotEmpty) {
+        debugPrint('✅ User profile ditemukan');
+        return _safeRow(results.first);
+      }
+      debugPrint('⚠️ User profile tidak ditemukan');
       return null;
     } catch (e) {
-      debugPrint('getUserProfile error: $e');
+      debugPrint('❌ getUserProfile error: $e');
       return null;
     }
   }
 
-  // Check if user has profile
   Future<bool> hasUserProfile() async {
     final profile = await getUserProfile();
-    return profile != null;
+    final has = profile != null;
+    debugPrint('🔵 hasUserProfile: $has');
+    return has;
   }
 
-  // ============================================================
-  // 3. SCAN HISTORY (riwayat deteksi)
-  // ============================================================
+  // ─── 3. Scan History (Method paling penting) ───────────────
 
-  // Save scan result to history
   Future<int> saveScanHistory({
     required String imagePath,
     required String label,
@@ -389,185 +412,162 @@ class DatabaseManager {
     String? healthTip,
     String? warning,
   }) async {
+    debugPrint('🔵 saveScanHistory: $indonesianName, ${calories}kcal');
     try {
       final db = await database;
       final now = DateTime.now().millisecondsSinceEpoch;
+
+      final id = await db.insert('scan_history', {
+        'image_path': imagePath,
+        'label': label,
+        'indonesian_name': indonesianName,
+        'calories': calories,
+        'protein': protein,
+        'carbs': carbs,
+        'fat': fat,
+        'fiber': fiber ?? 0,
+        'sugar': sugar ?? 0,
+        'sodium': sodium ?? 0,
+        'health_level': healthLevel,
+        'health_tip': healthTip,
+        'warning': warning,
+        'scanned_at': now,
+      });
       
-      if (!db.isOpen) {
-        debugPrint('Database is closed, reinitializing...');
-        await init();
-        return await saveScanHistory(
-          imagePath: imagePath,
-          label: label,
-          indonesianName: indonesianName,
-          calories: calories,
-          protein: protein,
-          carbs: carbs,
-          fat: fat,
-          fiber: fiber,
-          sugar: sugar,
-          sodium: sodium,
-          healthLevel: healthLevel,
-          healthTip: healthTip,
-          warning: warning,
-        );
-      }
+      debugPrint('✅ Scan history tersimpan dengan id=$id');
+      return id;
       
-      return await db.insert(
-        'scan_history',
-        {
-          'image_path': imagePath,
-          'label': label,
-          'indonesian_name': indonesianName,
-          'calories': calories,
-          'protein': protein,
-          'carbs': carbs,
-          'fat': fat,
-          'fiber': fiber,
-          'sugar': sugar,
-          'sodium': sodium,
-          'health_level': healthLevel,
-          'health_tip': healthTip,
-          'warning': warning,
-          'scanned_at': now,
-        },
-      );
     } catch (e) {
-      debugPrint('saveScanHistory error: $e');
+      debugPrint('❌ saveScanHistory error: $e');
       return -1;
     }
   }
 
-  // Get all scan history (latest first)
   Future<List<Map<String, dynamic>>> getAllScanHistory() async {
+    debugPrint('🔵 getAllScanHistory - mulai mengambil data...');
     try {
       final db = await database;
-      
-      if (!db.isOpen) {
-        debugPrint('Database is closed, reinitializing...');
-        await init();
-        return getAllScanHistory();
-      }
-      
-      return await db.query(
+      final rows = await db.query(
         'scan_history',
         orderBy: 'scanned_at DESC',
       );
+      
+      debugPrint('✅ getAllScanHistory - berhasil mengambil ${rows.length} record');
+      if (rows.isNotEmpty) {
+        debugPrint('📊 Contoh data pertama: ${rows.first['indonesian_name']}');
+      }
+      return _safeRows(rows);
+      
     } catch (e) {
-      debugPrint('getAllScanHistory error: $e');
+      debugPrint('❌ getAllScanHistory error: $e');
       return [];
     }
   }
 
-  // Get scan history by date
   Future<List<Map<String, dynamic>>> getScanHistoryByDate(DateTime date) async {
+    debugPrint('🔵 getScanHistoryByDate: $date');
     try {
       final db = await database;
       final startOfDay = DateTime(date.year, date.month, date.day);
       final endOfDay = startOfDay.add(const Duration(days: 1));
       
-      return await db.query(
+      final rows = await db.query(
         'scan_history',
         where: 'scanned_at >= ? AND scanned_at < ?',
         whereArgs: [startOfDay.millisecondsSinceEpoch, endOfDay.millisecondsSinceEpoch],
         orderBy: 'scanned_at DESC',
       );
+      
+      debugPrint('✅ Ditemukan ${rows.length} record untuk tanggal $date');
+      return _safeRows(rows);
+      
     } catch (e) {
-      debugPrint('getScanHistoryByDate error: $e');
+      debugPrint('❌ getScanHistoryByDate error: $e');
       return [];
     }
   }
 
-  // Get today's total calories
   Future<int> getTodayTotalCalories() async {
+    debugPrint('🔵 getTodayTotalCalories');
     try {
       final today = DateTime.now();
       final startOfDay = DateTime(today.year, today.month, today.day);
       final endOfDay = startOfDay.add(const Duration(days: 1));
       
       final db = await database;
+      final result = await db.rawQuery(
+        'SELECT COALESCE(SUM(calories), 0) as total FROM scan_history WHERE scanned_at >= ? AND scanned_at < ?',
+        [startOfDay.millisecondsSinceEpoch, endOfDay.millisecondsSinceEpoch],
+      );
       
-      if (!db.isOpen) {
-        debugPrint('Database is closed, reinitializing...');
-        await init();
-        return getTodayTotalCalories();
-      }
+      final total = (result.first['total'] as num?)?.toInt() ?? 0;
+      debugPrint('✅ Total kalori hari ini: $total kcal');
+      return total;
       
-      final result = await db.rawQuery('''
-        SELECT SUM(calories) as total FROM scan_history
-        WHERE scanned_at >= ? AND scanned_at < ?
-      ''', [startOfDay.millisecondsSinceEpoch, endOfDay.millisecondsSinceEpoch]);
-      
-      return result.first['total'] as int? ?? 0;
     } catch (e) {
-      debugPrint('getTodayTotalCalories error: $e');
+      debugPrint('❌ getTodayTotalCalories error: $e');
       return 0;
     }
   }
 
-  // Get today's nutrition summary
   Future<Map<String, double>> getTodayNutritionSummary() async {
+    debugPrint('🔵 getTodayNutritionSummary');
     try {
       final today = DateTime.now();
       final startOfDay = DateTime(today.year, today.month, today.day);
       final endOfDay = startOfDay.add(const Duration(days: 1));
       
       final db = await database;
-      
-      // Cek apakah database terbuka
-      if (!db.isOpen) {
-        debugPrint('Database is closed, reinitializing...');
-        await init();
-        return getTodayNutritionSummary(); // Retry
-      }
-      
       final result = await db.rawQuery('''
-        SELECT 
-          SUM(calories) as total_calories,
-          SUM(protein) as total_protein,
-          SUM(carbs) as total_carbs,
-          SUM(fat) as total_fat
+        SELECT
+          COALESCE(SUM(calories), 0) as total_calories,
+          COALESCE(SUM(protein), 0) as total_protein,
+          COALESCE(SUM(carbs), 0) as total_carbs,
+          COALESCE(SUM(fat), 0) as total_fat
         FROM scan_history
         WHERE scanned_at >= ? AND scanned_at < ?
       ''', [startOfDay.millisecondsSinceEpoch, endOfDay.millisecondsSinceEpoch]);
-      
-      return {
+
+      final summary = {
         'total_calories': (result.first['total_calories'] as num?)?.toDouble() ?? 0,
         'total_protein': (result.first['total_protein'] as num?)?.toDouble() ?? 0,
         'total_carbs': (result.first['total_carbs'] as num?)?.toDouble() ?? 0,
         'total_fat': (result.first['total_fat'] as num?)?.toDouble() ?? 0,
       };
+      
+      debugPrint('✅ Ringkasan nutrisi hari ini: $summary');
+      return summary;
+      
     } catch (e) {
-      debugPrint('getTodayNutritionSummary error: $e');
-      // Return default values instead of crashing
-      return {
-        'total_calories': 0,
-        'total_protein': 0,
-        'total_carbs': 0,
-        'total_fat': 0,
-      };
+      debugPrint('❌ getTodayNutritionSummary error: $e');
+      return {'total_calories': 0, 'total_protein': 0, 'total_carbs': 0, 'total_fat': 0};
     }
   }
 
-  // Delete scan history by id
   Future<void> deleteScanHistory(int id) async {
-    final db = await database;
-    await db.delete('scan_history', where: 'id = ?', whereArgs: [id]);
-    debugPrint('Scan history deleted: $id');
+    debugPrint('🔵 deleteScanHistory: $id');
+    try {
+      final db = await database;
+      await db.delete('scan_history', where: 'id = ?', whereArgs: [id]);
+      debugPrint('✅ Scan history dengan id=$id dihapus');
+    } catch (e) {
+      debugPrint('❌ deleteScanHistory error: $e');
+    }
   }
 
-  // Delete all scan history
   Future<void> deleteAllScanHistory() async {
-    final db = await database;
-    await db.delete('scan_history');
-    debugPrint('All scan history deleted');
+    debugPrint('🔵 deleteAllScanHistory');
+    try {
+      final db = await database;
+      final count = await db.delete('scan_history');
+      debugPrint('✅ Semua scan history dihapus ($count record)');
+    } catch (e) {
+      debugPrint('❌ deleteAllScanHistory error: $e');
+    }
   }
 
-  // ============================================================
-  // 4. DAILY PROGRESS (ringkasan harian)
-  // ============================================================
+  // ─── 4. Daily Progress ─────────────────────────────────────
 
-  // Update or create daily progress
   Future<void> updateDailyProgress({
     required String date,
     required int totalCalories,
@@ -575,87 +575,165 @@ class DatabaseManager {
     required double totalCarbs,
     required double totalFat,
   }) async {
-    final db = await database;
-    final now = DateTime.now().millisecondsSinceEpoch;
-    
-    final existing = await getDailyProgress(date);
-    
-    if (existing != null) {
-      await db.update(
-        'daily_progress',
-        {
-          'total_calories': totalCalories,
-          'total_protein': totalProtein,
-          'total_carbs': totalCarbs,
-          'total_fat': totalFat,
-          'updated_at': now,
-        },
-        where: 'date = ?',
-        whereArgs: [date],
-      );
-    } else {
-      await db.insert(
-        'daily_progress',
-        {
+    debugPrint('🔵 updateDailyProgress: $date, calories=$totalCalories');
+    try {
+      final db = await database;
+      final now = DateTime.now().millisecondsSinceEpoch;
+      final existing = await getDailyProgress(date);
+
+      if (existing != null) {
+        await db.update(
+          'daily_progress',
+          {
+            'total_calories': totalCalories,
+            'total_protein': totalProtein,
+            'total_carbs': totalCarbs,
+            'total_fat': totalFat,
+            'updated_at': now,
+          },
+          where: 'date = ?',
+          whereArgs: [date],
+        );
+        debugPrint('✅ Daily progress diUPDATE untuk $date');
+      } else {
+        await db.insert('daily_progress', {
           'date': date,
           'total_calories': totalCalories,
           'total_protein': totalProtein,
           'total_carbs': totalCarbs,
           'total_fat': totalFat,
           'updated_at': now,
-        },
-      );
+        });
+        debugPrint('✅ Daily progress diINSERT untuk $date');
+      }
+    } catch (e) {
+      debugPrint('❌ updateDailyProgress error: $e');
     }
   }
 
-  // Get daily progress by date
   Future<Map<String, dynamic>?> getDailyProgress(String date) async {
+    debugPrint('🔵 getDailyProgress: $date');
     try {
       final db = await database;
-      final List<Map<String, dynamic>> results = await db.query(
+      final results = await db.query(
         'daily_progress',
         where: 'date = ?',
         whereArgs: [date],
       );
-      if (results.isNotEmpty) return results.first;
+      
+      if (results.isNotEmpty) {
+        debugPrint('✅ Daily progress ditemukan untuk $date');
+        return _safeRow(results.first);
+      }
+      debugPrint('⚠️ Daily progress tidak ditemukan untuk $date');
       return null;
+      
     } catch (e) {
-      debugPrint('getDailyProgress error: $e');
+      debugPrint('❌ getDailyProgress error: $e');
       return null;
     }
   }
 
-  // ============================================================
-  // UTILITY
-  // ============================================================
+  // ─── Utility & Maintenance ─────────────────────────────────
 
-  // Reset all data (untuk debugging)
+  /// Reset semua data (tanpa menghapus user profile)
   Future<void> resetAllData() async {
-    await deleteAllCorrections();
-    await deleteAllScanHistory();
-    debugPrint('All data reset');
-  }
-
-  // Close database
-  Future<void> close() async {
-    if (_database != null) {
-      await _database!.close();
-      _database = null;
+    debugPrint('🔵 resetAllData - mereset semua data...');
+    try {
+      final db = await database;
+      final correctionsCount = await db.delete('corrections');
+      final scanCount = await db.delete('scan_history');
+      final progressCount = await db.delete('daily_progress');
+      
+      debugPrint('✅ Reset selesai - corrections: $correctionsCount, scan: $scanCount, progress: $progressCount');
+    } catch (e) {
+      debugPrint('❌ resetAllData error: $e');
     }
   }
 
-  // Untuk menyimpan status onboarding
+  /// Reset total (termasuk user profile) - untuk fresh start
+  Future<void> resetAllDataComplete() async {
+    debugPrint('🔵 resetAllDataComplete - mereset SEMUA data...');
+    try {
+      final db = await database;
+      await db.delete('corrections');
+      await db.delete('scan_history');
+      await db.delete('daily_progress');
+      await db.delete('user_profile');
+      
+      // Insert default profile
+      final now = DateTime.now().millisecondsSinceEpoch;
+      await db.insert('user_profile', {
+        'name': 'Pengguna',
+        'target_calories': 2000,
+        'target_protein': 50,
+        'target_carbs': 250,
+        'target_fat': 65,
+        'created_at': now,
+        'updated_at': now,
+      });
+      
+      debugPrint('✅ Complete reset selesai, user profile default dibuat');
+    } catch (e) {
+      debugPrint('❌ resetAllDataComplete error: $e');
+    }
+  }
+
+  /// Tutup koneksi database
+  Future<void> close() async {
+    debugPrint('🔵 close - menutup database...');
+    try {
+      if (_database != null && _database!.isOpen) {
+        await _database!.close();
+        _database = null;
+        debugPrint('✅ Database ditutup');
+      }
+    } catch (e) {
+      debugPrint('⚠️ Error saat menutup database: $e');
+    }
+  }
+
+  /// Cek apakah database terbuka
+  Future<bool> isDatabaseOpen() async {
+    final isOpen = _database != null && _database!.isOpen;
+    debugPrint('🔵 isDatabaseOpen: $isOpen');
+    return isOpen;
+  }
+
+  /// Debug: Cetak semua data scan history
+  Future<void> debugPrintAllScanHistory() async {
+    debugPrint('🔵 ========== DEBUG SCAN HISTORY ==========');
+    final history = await getAllScanHistory();
+    for (int i = 0; i < history.length; i++) {
+      final item = history[i];
+      debugPrint('📋 [$i] id=${item['id']}, name=${item['indonesian_name']}, calories=${item['calories']}, date=${DateTime.fromMillisecondsSinceEpoch(item['scanned_at'] as int)}');
+    }
+    debugPrint('🔵 ========== END DEBUG ==========');
+  }
+
+  // ─── Onboarding Status ─────────────────────────────────────
+
   Future<void> setOnboardingCompleted(bool completed) async {
-    // Gunakan SharedPreferences untuk flag sederhana
-    // Atau bisa juga simpan di tabel user_profile
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setBool('onboarding_completed', completed);
+    debugPrint('🔵 setOnboardingCompleted: $completed');
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setBool('onboarding_completed', completed);
+      debugPrint('✅ Onboarding status saved');
+    } catch (e) {
+      debugPrint('❌ setOnboardingCompleted error: $e');
+    }
   }
 
-  // Untuk mengecek apakah onboarding sudah selesai
   Future<bool> isOnboardingCompleted() async {
-    final prefs = await SharedPreferences.getInstance();
-    return prefs.getBool('onboarding_completed') ?? false;
+    debugPrint('🔵 isOnboardingCompleted');
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final completed = prefs.getBool('onboarding_completed') ?? false;
+      debugPrint('✅ Onboarding completed: $completed');
+      return completed;
+    } catch (e) {
+      debugPrint('❌ isOnboardingCompleted error: $e');
+      return false;
+    }
   }
-
 }

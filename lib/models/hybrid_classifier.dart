@@ -1,15 +1,13 @@
 // HYBRID CLASSIFIER - CNN + SQLite Cache + Validasi Gambar :
-
-// 1. Deteksi makanan dengan CNN (MobileNetV2, 18 kelas)
+// 1. Deteksi makanan dengan CNN (MobileNetV2, 19 kelas)
 // 2. Cache koreksi user di SQLite (belajar dari kesalahan)
 // 3. Validasi gambar ringan (keburaman sampling, ukuran, format)
 // 4. Deteksi gambar bukan makanan (confidence threshold)
 // 5. Timeout untuk mencegah freeze
-// 6. Optimasi memory (resize gambar besar sebelum diproses)
-// 7. Blur detection dengan sampling (tidak semua pixel)
+// 6. Optimasi memory (resize gambar besar sebelum diproses di Isolate)
+// 7. Blur detection dengan sampling (efisien & cepat di Isolate)
 
 import 'dart:math';
-
 import 'package:flutter/foundation.dart';
 import 'package:tflite_flutter/tflite_flutter.dart';
 import 'package:image/image.dart' as img;
@@ -21,31 +19,10 @@ class HybridFoodClassifier {
   late List<String> _labels;
   late DatabaseManager _db;
   
-  // ==================== KONSTANTA ====================
   static const int numClasses = 19;
-  
-  // Threshold untuk validasi gambar
   static const double nonFoodThreshold = 0.50;      // < 50% = bukan makanan
   static const double lowConfidenceThreshold = 0.70; // < 70% = warning
-  
-  // Threshold untuk deteksi keburaman
-  static const double blurThreshold = 250.0;         // < 250 = buram
-  
-  // Threshold ukuran file
-  static const int minFileSize = 5000;               // minimal 5KB
-  static const int maxFileSizeForProcessing = 3 * 1024 * 1024; // maksimal 3MB
-  
-  // Threshold dimensi gambar
-  static const int minImageDimension = 50;           // minimal 50x50
-  static const int maxImageDimensionForProcessing = 800; // maksimal 800x800
-  
-  // Timeout prediksi (detik)
-  static const int predictionTimeoutSeconds = 5;
-  
-  // Sample rate untuk blur detection (1 dari setiap N pixel)
-  static const int blurSampleRate = 20;
-  
-  // ==================== LOAD MODEL ====================
+  static const int predictionTimeoutSeconds = 8;     // Toleransi sedikit lebih longgar untuk Isolate
   
   Future<void> loadModel() async {
     try {
@@ -62,14 +39,11 @@ class HybridFoodClassifier {
       
       final count = await _db.getCorrectionsCount();
       debugPrint('Correction cache loaded: $count entries');
-      
     } catch (e) {
       debugPrint('Error loading model: $e');
       rethrow;
     }
   }
-  
-  // ==================== HASH GAMBAR ====================
   
   String _computeImageHash(List<int> imageBytes) {
     var hash = 0;
@@ -78,46 +52,73 @@ class HybridFoodClassifier {
     }
     return hash.toRadixString(16).padLeft(8, '0');
   }
+
+  // ===========================================================================
+  // BACKGROUND ISOLATE PIPELINE (Dijalankan di luar Isolate Utama)
+  // ===========================================================================
   
-  // ==================== OPTIMASI & RESIZE GAMBAR ====================
-  
-  /// Resize gambar jika terlalu besar (harus dilakukan SEBELUM apapun)
-  img.Image _resizeIfNeeded(img.Image image) {
-    int targetWidth = image.width;
-    int targetHeight = image.height;
-    
-    // Cek dimensi
-    if (image.width > maxImageDimensionForProcessing || 
-        image.height > maxImageDimensionForProcessing) {
-      double scale = maxImageDimensionForProcessing / max(image.width, image.height);
-      targetWidth = (image.width * scale).toInt();
-      targetHeight = (image.height * scale).toInt();
-      debugPrint('Resize: ${image.width}x${image.height} → ${targetWidth}x$targetHeight');
-      return img.copyResize(image, width: targetWidth, height: targetHeight);
+  /// Fungsi tingkat atas / statis untuk menangani preprocessing gambar di thread terpisah.
+  /// Ini membebaskan Isolate Utama dari proses decoding & manipulasi piksel yang lambat.
+  static Map<String, dynamic> _preprocessImageTask(List<int> imageBytes) {
+    const int minFileSize = 5000; // 5KB
+    const int maxFileSizeForProcessing = 3 * 1024 * 1024; // 3MB
+    const int minImageDimension = 50;
+    const int maxImageDimensionForProcessing = 800;
+    const double blurThreshold = 250.0;
+    const int blurSampleRate = 20;
+
+    // 1. Cek ukuran file
+    if (imageBytes.length < minFileSize) {
+      return {
+        'isValid': false,
+        'errorCode': 'FILE_TOO_SMALL',
+        'message': 'File gambar terlalu kecil atau mungkin rusak.',
+      };
     }
     
-    return image;
-  }
-  
-  /// Decode dan resize gambar dari bytes
-  img.Image? _decodeAndResize(List<int> imageBytes) {
-    Uint8List uint8List = Uint8List.fromList(imageBytes);
-    img.Image? image = img.decodeImage(uint8List);
-    if (image == null) return null;
-    return _resizeIfNeeded(image);
-  }
-  
-  // ==================== VALIDASI GAMBAR (RINGAN) ====================
-  
-  /// Deteksi keburaman dengan SAMPLING 
-  double _calculateBlurrinessLight(img.Image image) {
-    img.Image gray = img.grayscale(image);
-    
+    if (imageBytes.length > maxFileSizeForProcessing) {
+      return {
+        'isValid': false,
+        'errorCode': 'FILE_TOO_LARGE',
+        'message': 'File gambar terlalu besar (maksimal 3MB). Silakan pilih gambar dengan resolusi lebih rendah.',
+      };
+    }
+
+    // 2. Decode Gambar
+    final uint8list = Uint8List.fromList(imageBytes);
+    final image = img.decodeImage(uint8list);
+    if (image == null) {
+      return {
+        'isValid': false,
+        'errorCode': 'INVALID_IMAGE',
+        'message': 'File tidak dapat dibaca sebagai gambar. Pastikan format file JPG/PNG.',
+      };
+    }
+
+    // 3. Resize jika melebihi batas resolusi pengolahan
+    img.Image processedImage = image;
+    if (image.width > maxImageDimensionForProcessing || image.height > maxImageDimensionForProcessing) {
+      double scale = maxImageDimensionForProcessing / max(image.width, image.height);
+      int targetWidth = (image.width * scale).toInt();
+      int targetHeight = (image.height * scale).toInt();
+      processedImage = img.copyResize(image, width: targetWidth, height: targetHeight);
+    }
+
+    // 4. Validasi dimensi minimum
+    if (processedImage.width < minImageDimension || processedImage.height < minImageDimension) {
+      return {
+        'isValid': false,
+        'errorCode': 'IMAGE_TOO_SMALL',
+        'message': 'Gambar terlalu kecil (minimal 50x50 piksel).',
+      };
+    }
+
+    // 5. Hitung tingkat keburaman dengan Sampling grayscale
+    final gray = img.grayscale(processedImage);
     double sum = 0;
     double sumSq = 0;
     int count = 0;
     
-    // Sample setiap N pixel untuk efisiensi
     for (int y = 0; y < gray.height; y += blurSampleRate) {
       for (int x = 0; x < gray.width; x += blurSampleRate) {
         final pixel = gray.getPixel(x, y);
@@ -128,95 +129,134 @@ class HybridFoodClassifier {
       }
     }
     
-    if (count == 0) return 1000.0;
-    
-    final mean = sum / count;
-    final variance = (sumSq / count) - (mean * mean);
-    return variance;
-  }
-  
-  /// Validasi gambar sebelum prediksi
-  ValidationResult validateImage(List<int> imageBytes) {
-    // 1. Cek ukuran file terlalu kecil
-    if (imageBytes.length < minFileSize) {
-      return ValidationResult(
-        isValid: false,
-        errorCode: 'FILE_TOO_SMALL',
-        message: 'File gambar terlalu kecil atau mungkin rusak.',
-      );
+    double variance = 1000.0;
+    if (count > 0) {
+      final mean = sum / count;
+      variance = (sumSq / count) - (mean * mean);
     }
-    
-    // 2. Cek ukuran file terlalu besar
-    if (imageBytes.length > maxFileSizeForProcessing) {
-      return ValidationResult(
-        isValid: false,
-        errorCode: 'FILE_TOO_LARGE',
-        message: 'File gambar terlalu besar (maksimal 3MB). Silakan pilih gambar dengan resolusi lebih rendah.',
-      );
+
+    if (variance < blurThreshold) {
+      return {
+        'isValid': false,
+        'errorCode': 'IMAGE_TOO_BLURRY',
+        'message': 'Gambar terlalu buram. Pastikan fokus kamera tepat.',
+      };
     }
-    
-    // 3. Decode dan resize
-    final image = _decodeAndResize(imageBytes);
-    if (image == null) {
-      return ValidationResult(
-        isValid: false,
-        errorCode: 'INVALID_IMAGE',
-        message: 'File tidak dapat dibaca sebagai gambar. Pastikan format file JPG/PNG.',
-      );
-    }
-    
-    // 4. Cek dimensi minimal
-    if (image.width < minImageDimension || image.height < minImageDimension) {
-      return ValidationResult(
-        isValid: false,
-        errorCode: 'IMAGE_TOO_SMALL',
-        message: 'Gambar terlalu kecil (minimal 50x50 piksel).',
-      );
-    }
-    
-    // 5. Cek keburaman
-    final blurScore = _calculateBlurrinessLight(image);
-    if (blurScore < blurThreshold) {
-      return ValidationResult(
-        isValid: false,
-        errorCode: 'IMAGE_TOO_BLURRY',
-        message: 'Gambar terlalu buram. Pastikan fokus kamera tepat.',
-      );
-    }
-    
-    return ValidationResult(
-      isValid: true,
-      errorCode: null,
-      message: null,
-      image: image,
-    );
-  }
-  
-  // ==================== PREDIKSI CNN ====================
-  
-  Future<CnnPredictionResult> _predictCnn(img.Image image) async {
-    // Resize ke 224x224 (ukuran input MobileNetV2)
-    img.Image resized = img.copyResize(image, width: 224, height: 224);
-    
-    // Konversi ke tensor
-    var input = List.filled(1 * 224 * 224 * 3, 0.0);
+
+    // 6. Siapkan Tensor Input MobileNetV2 (224x224x3) secara langsung
+    final resized = img.copyResize(processedImage, width: 224, height: 224);
+    final inputBuffer = Float32List(1 * 224 * 224 * 3);
     int index = 0;
     for (int y = 0; y < 224; y++) {
       for (int x = 0; x < 224; x++) {
         final pixel = resized.getPixel(x, y);
-        input[index++] = pixel.r.toDouble() / 255.0;
-        input[index++] = pixel.g.toDouble() / 255.0;
-        input[index++] = pixel.b.toDouble() / 255.0;
+        inputBuffer[index++] = pixel.r / 255.0;
+        inputBuffer[index++] = pixel.g / 255.0;
+        inputBuffer[index++] = pixel.b / 255.0;
       }
     }
+
+    return {
+      'isValid': true,
+      'inputBuffer': inputBuffer,
+    };
+  }
+
+  // ===========================================================================
+  // PREDIKSI DENGAN TIMEOUT & REAKTIVITAS
+  // ===========================================================================
+  
+  Future<Prediction> predictWithTimeout(List<int> imageBytes) async {
+    try {
+      return await predict(imageBytes).timeout(
+        const Duration(seconds: predictionTimeoutSeconds),
+        onTimeout: () {
+          debugPrint('Prediction timeout reached!');
+          return const Prediction(
+            label: 'error',
+            probability: 0.0,
+            allProbabilities: [],
+            isFromCache: false,
+            errorCode: 'TIMEOUT',
+            errorMessage: 'Proses deteksi terlalu lama. Silakan coba gambar dengan resolusi lebih kecil (maksimal 3MB).',
+          );
+        },
+      );
+    } catch (e) {
+      debugPrint('Prediction error: $e');
+      return const Prediction(
+        label: 'error',
+        probability: 0.0,
+        allProbabilities: [],
+        isFromCache: false,
+        errorCode: 'UNKNOWN_ERROR',
+        errorMessage: 'Terjadi kesalahan sistem saat mendeteksi gambar.',
+      );
+    }
+  }
+  
+  Future<Prediction> predict(List<int> imageBytes) async {
+    // STEP 1: Hitung hash gambar asli (Sangat cepat di thread utama)
+    final imageHash = _computeImageHash(imageBytes);
+    debugPrint('Image Hash: ${imageHash.substring(0, 8)}...');
     
-    var inputTensor = input.reshape([1, 224, 224, 3]);
+    // STEP 2: Periksa cache database terlebih dahulu
+    try {
+      final correction = await _db.findByHash(imageHash);
+      if (correction != null) {
+        final correctLabel = correction['label'] as String;
+        debugPrint('[CACHE] Match found in SQLite: $correctLabel');
+        return Prediction(
+          label: correctLabel,
+          probability: 0.95,
+          allProbabilities: const [],
+          isFromCache: true,
+          isFromCorrection: true,
+        );
+      }
+    } catch (dbError) {
+      debugPrint('Database cache query error: $dbError');
+    }
+    
+    // STEP 3: Delegasikan seluruh komputasi berat gambar ke Background Isolate (compute)
+    debugPrint('[Isolate] Delegating preprocessing tasks...');
+    final preprocessResult = await compute(_preprocessImageTask, imageBytes);
+    
+    if (!preprocessResult['isValid']) {
+      final errorCode = preprocessResult['errorCode'] as String;
+      final message = preprocessResult['message'] as String;
+      debugPrint('[Isolate] Preprocessing validation failed: $errorCode');
+      return Prediction(
+        label: 'error',
+        probability: 0.0,
+        allProbabilities: const [],
+        isFromCache: false,
+        errorCode: errorCode,
+        errorMessage: message,
+      );
+    }
+    
+    // STEP 4: Jalankan Inferensi Model AI (C++ native run, instan di thread utama)
+    debugPrint('[CNN] Running TFLite inference...');
+    final Float32List inputBuffer = preprocessResult['inputBuffer'];
+    var inputTensor = inputBuffer.reshape([1, 224, 224, 3]);
     var output = List.filled(1 * numClasses, 0.0).reshape([1, numClasses]);
     
-    // Run inference
-    _cnnModel.run(inputTensor, output);
+    try {
+      _cnnModel.run(inputTensor, output);
+    } catch (e) {
+      debugPrint('[CNN] Inference runtime error: $e');
+      return const Prediction(
+        label: 'error',
+        probability: 0.0,
+        allProbabilities: [],
+        isFromCache: false,
+        errorCode: 'INFERENCE_ERROR',
+        errorMessage: 'Model AI gagal memproses data gambar.',
+      );
+    }
     
-    // Cari probabilitas tertinggi (argmax)
+    // STEP 5: Evaluasi Hasil Inferensi Logits
     int predictedIndex = 0;
     double maxProb = output[0][0];
     for (int i = 1; i < output[0].length; i++) {
@@ -230,7 +270,7 @@ class HybridFoodClassifier {
         ? _labels[predictedIndex] 
         : 'unknown';
     
-    // Top 3 predictions untuk alternatif
+    // Ambil Top 3 alternatif prediksi
     List<MapEntry<int, double>> sortedProbs = [];
     for (int i = 0; i < output[0].length; i++) {
       sortedProbs.add(MapEntry(i, output[0][i]));
@@ -246,118 +286,36 @@ class HybridFoodClassifier {
       });
     }
     
-    return CnnPredictionResult(
+    // Evaluasi jika gambar bukan makanan
+    if (maxProb < nonFoodThreshold) {
+      debugPrint('[CNN] Confidence score low (${maxProb.toStringAsFixed(2)}). Not food detected.');
+      return Prediction(
+        label: 'not_food',
+        probability: maxProb,
+        allProbabilities: output[0],
+        isFromCache: false,
+        errorCode: 'NOT_FOOD',
+        errorMessage: 'Gambar tidak dikenali sebagai makanan. Pastikan foto berisi makanan yang jelas.',
+        topPredictions: topPredictions,
+      );
+    }
+    
+    final isLowConf = maxProb < lowConfidenceThreshold;
+    debugPrint('[CNN] Result: $predictedLabel (${(maxProb * 100).toStringAsFixed(1)}%)${isLowConf ? " ⚠️ low confidence" : ""}');
+    
+    return Prediction(
       label: predictedLabel,
-      confidence: maxProb,
+      probability: maxProb,
       allProbabilities: output[0],
+      isFromCache: false,
+      isLowConfidence: isLowConf,
       topPredictions: topPredictions,
     );
   }
   
-  // ==================== PREDIKSI DENGAN TIMEOUT ====================
-  
-  Future<Prediction> predictWithTimeout(List<int> imageBytes) async {
-    try {
-      return await predict(imageBytes).timeout(
-        const Duration(seconds: predictionTimeoutSeconds),
-        onTimeout: () {
-          debugPrint('Prediction timeout!');
-          return Prediction(
-            label: 'error',
-            probability: 0.0,
-            allProbabilities: const [],
-            isFromCache: false,
-            errorCode: 'TIMEOUT',
-            errorMessage: 'Proses deteksi terlalu lama. Silakan coba gambar dengan resolusi lebih kecil (maksimal 3MB).',
-          );
-        },
-      );
-    } catch (e) {
-      debugPrint('Prediction error: $e');
-      return Prediction(
-        label: 'error',
-        probability: 0.0,
-        allProbabilities: const [],
-        isFromCache: false,
-        errorCode: 'UNKNOWN_ERROR',
-        errorMessage: 'Terjadi kesalahan. Silakan coba lagi.',
-      );
-    }
-  }
-  
-  // ==================== PREDIKSI UTAMA ====================
-  
-  Future<Prediction> predict(List<int> imageBytes) async {
-    // STEP 1: Validasi gambar
-    final validation = validateImage(imageBytes);
-    if (!validation.isValid) {
-      debugPrint('Validation failed: ${validation.errorCode}');
-      return Prediction(
-        label: 'error',
-        probability: 0.0,
-        allProbabilities: const [],
-        isFromCache: false,
-        errorCode: validation.errorCode,
-        errorMessage: validation.message,
-      );
-    }
-    
-    // STEP 2: Hitung hash untuk cache (gunakan byte asli, bukan yang sudah di-resize)
-    final imageHash = _computeImageHash(imageBytes);
-    debugPrint('Hash: ${imageHash.substring(0, 8)}...');
-    
-    // STEP 3: Cek cache di database
-    try {
-      final correction = await _db.findByHash(imageHash);
-      if (correction != null) {
-        final correctLabel = correction['label'] as String;
-        debugPrint('[CACHE] Found: $correctLabel');
-        
-        return Prediction(
-          label: correctLabel,
-          probability: 0.95,
-          allProbabilities: const [],
-          isFromCache: true,
-          isFromCorrection: true,
-        );
-      }
-    } catch (dbError) {
-      debugPrint('Database error: $dbError');
-    }
-    
-    // STEP 4: Prediksi dengan CNN (gunakan image yang sudah di-resize dari validasi)
-    debugPrint('[CNN] No cache, predicting...');
-    final cnnResult = await _predictCnn(validation.image!);
-    
-    // STEP 5: Cek gambar bukan makanan
-    if (cnnResult.confidence < nonFoodThreshold) {
-      debugPrint('[CNN] Not food detected (confidence: ${cnnResult.confidence.toStringAsFixed(2)})');
-      return Prediction(
-        label: 'not_food',
-        probability: cnnResult.confidence,
-        allProbabilities: cnnResult.allProbabilities,
-        isFromCache: false,
-        errorCode: 'NOT_FOOD',
-        errorMessage: 'Gambar tidak dikenali sebagai makanan. Pastikan foto berisi makanan yang jelas.',
-        topPredictions: cnnResult.topPredictions,
-      );
-    }
-    
-    // STEP 6: Return hasil normal
-    final isLowConf = cnnResult.confidence < lowConfidenceThreshold;
-    debugPrint('[CNN] Result: ${cnnResult.label} (${(cnnResult.confidence * 100).toStringAsFixed(1)}%)${isLowConf ? " ⚠️ low confidence" : ""}');
-    
-    return Prediction(
-      label: cnnResult.label,
-      probability: cnnResult.confidence,
-      allProbabilities: cnnResult.allProbabilities,
-      isFromCache: false,
-      isLowConfidence: isLowConf,
-      topPredictions: cnnResult.topPredictions,
-    );
-  }
-  
-  // ==================== BELAJAR DARI KESALAHAN ====================
+  // ===========================================================================
+  // BELAJAR DARI MASUKAN PENGGUNA (FEEDBACK)
+  // ===========================================================================
   
   Future<void> learnFromFeedback({
     required List<int> imageBytes,
@@ -365,29 +323,24 @@ class HybridFoodClassifier {
     required String correctLabel,
   }) async {
     try {
-      // Validasi sebelum menyimpan
-      final validation = validateImage(imageBytes);
-      if (!validation.isValid) {
-        debugPrint('Cannot learn from invalid image: ${validation.errorCode}');
+      // Validasi gambar di tingkat Isolate sebelum dipelajari
+      final preprocessResult = await compute(_preprocessImageTask, imageBytes);
+      if (!preprocessResult['isValid']) {
+        debugPrint('[Learning] Abandoned. Preprocessing failed.');
         return;
       }
       
       final imageHash = _computeImageHash(imageBytes);
-      debugPrint('Learning hash: ${imageHash.substring(0, 8)}...');
-      
-      // Cek existing
       final existing = await _db.findByHash(imageHash);
       
       if (existing != null) {
         final existingLabel = existing['label'] as String;
         if (existingLabel == correctLabel) {
-          debugPrint('Already correct, skipping...');
           return;
         }
-        debugPrint('Updating: $existingLabel → $correctLabel');
+        debugPrint('[Learning] Updating correction cache: $existingLabel → $correctLabel');
       }
       
-      // Simpan atau update
       await _db.insertOrUpdateCorrection(
         imageHash: imageHash,
         label: correctLabel,
@@ -395,14 +348,15 @@ class HybridFoodClassifier {
       );
       
       final count = await _db.getCorrectionsCount();
-      debugPrint('Learned! Cache size: $count');
-      
+      debugPrint('[Learning] Feedback successfully saved! Cache size: $count');
     } catch (e) {
-      debugPrint('Error learning: $e');
+      debugPrint('Error learning from feedback: $e');
     }
   }
   
-  // ==================== UTILITY ====================
+  // ===========================================================================
+  // UTILITY
+  // ===========================================================================
   
   List<String> get labels => _labels;
   
@@ -420,39 +374,12 @@ class HybridFoodClassifier {
   
   void dispose() {
     _cnnModel.close();
-    _db.close();
   }
 }
 
-// ==================== RESULT CLASSES ====================
-
-class ValidationResult {
-  final bool isValid;
-  final String? errorCode;
-  final String? message;
-  final img.Image? image;
-  
-  ValidationResult({
-    required this.isValid,
-    this.errorCode,
-    this.message,
-    this.image,
-  });
-}
-
-class CnnPredictionResult {
-  final String label;
-  final double confidence;
-  final List<double> allProbabilities;
-  final List<Map<String, dynamic>> topPredictions;
-  
-  CnnPredictionResult({
-    required this.label,
-    required this.confidence,
-    required this.allProbabilities,
-    required this.topPredictions,
-  });
-}
+// ===========================================================================
+// DATA CLASSES
+// ===========================================================================
 
 class Prediction {
   final String label;

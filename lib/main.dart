@@ -16,6 +16,13 @@ void main() async {
   // Initialize database manager (WAJIB sebelum cek onboarding)
   final dbManager = DatabaseManager();
   await dbManager.init();
+
+  // Test apakah database berfungsi
+  if (await dbManager.isDatabaseOpen()) {
+    debugPrint('✅ Database ready');
+  } else {
+    debugPrint('❌ Database failed to open');
+  }
   
   // Cek apakah user sudah memiliki profile di database
   final userProfile = await dbManager.getUserProfile();
