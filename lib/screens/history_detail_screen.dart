@@ -168,7 +168,7 @@ class HistoryDetailScreen extends StatelessWidget {
                   // ── Food name & date ─────────────────────────────────────
                   Text(
                     name,
-                    style: TextStyleHelper.displaySmall.copyWith(
+                    style: TextStyleHelper.headline2.copyWith(
                       color: AppColors.primary,
                     ),
                   ),

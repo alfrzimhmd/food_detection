@@ -302,9 +302,9 @@ class _HomeScreenState extends State<HomeScreen> {
                 children: [
                   Text(
                     'KALORI HARI INI',
-                    style: TextStyleHelper.labelSmall.copyWith(
+                    style: TextStyleHelper.labelLarge.copyWith(
                       letterSpacing: 1.8,
-                      color: AppColors.textLight,
+                      color: AppColors.textMedium,
                     ),
                   ),
                   const SizedBox(height: 4),

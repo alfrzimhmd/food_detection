@@ -34,7 +34,7 @@ dependencies:
 
   provider: ^6.0.5
 
-  google_fonts: ^6.2.1
+  # google_fonts: ^6.2.1
   
 dev_dependencies:
   flutter_test:
@@ -49,6 +49,48 @@ flutter:
     - assets/labels_indonesia.txt
     - assets/nutrition_data.json
     - assets/images/logo.png
+  fonts:
+    # Inter Font Family - setiap weight adalah family terpisah
+    - family: InterRegular
+      fonts:
+        - asset: assets/fonts/Inter-Regular.ttf
+    
+    - family: InterMedium
+      fonts:
+        - asset: assets/fonts/Inter-Medium.ttf
+    
+    - family: InterSemiBold
+      fonts:
+        - asset: assets/fonts/Inter-SemiBold.ttf
+    
+    - family: InterBold
+      fonts:
+        - asset: assets/fonts/Inter-Bold.ttf
+    
+    - family: InterExtraBold
+      fonts:
+        - asset: assets/fonts/Inter-ExtraBold.ttf
+    
+    # Plus Jakarta Sans Font Family
+    - family: PlusJakartaSansRegular
+      fonts:
+        - asset: assets/fonts/PlusJakartaSans-Regular.ttf
+    
+    - family: PlusJakartaSansMedium
+      fonts:
+        - asset: assets/fonts/PlusJakartaSans-Medium.ttf
+    
+    - family: PlusJakartaSansSemiBold
+      fonts:
+        - asset: assets/fonts/PlusJakartaSans-SemiBold.ttf
+    
+    - family: PlusJakartaSansBold
+      fonts:
+        - asset: assets/fonts/PlusJakartaSans-Bold.ttf
+    
+    - family: PlusJakartaSansExtraBold
+      fonts:
+        - asset: assets/fonts/PlusJakartaSans-ExtraBold.ttf
 
 flutter_icons:
   android: true
