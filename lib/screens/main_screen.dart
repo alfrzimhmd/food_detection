@@ -32,24 +32,29 @@ class _MainScreenState extends State<MainScreen> {
       
       // Bilah Navigasi Bawah dengan tombol scan menonjol ke atas
       bottomNavigationBar: Container(
-        color: Colors.white,
+        color: Colors.transparent, // Transparan agar shadow tidak terlihat double
         child: SafeArea(
           top: false,
           child: Container(
-            height: 60, // Tinggi bar
+            height: 60,
             decoration: BoxDecoration(
               color: Colors.white,
-              border: Border(
-                top: BorderSide(
-                  color: Colors.grey.shade100,
-                  width: 1.0,
-                ),
+              borderRadius: const BorderRadius.only(
+                topLeft: Radius.circular(24),
+                topRight: Radius.circular(24),
               ),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.08),
+                  blurRadius: 16,
+                  offset: const Offset(0, -4),
+                ),
+              ],
             ),
             child: Stack(
-              clipBehavior: Clip.none, // Agar tombol yang menonjol tidak terpotong
+              clipBehavior: Clip.none,
               children: [
-                // Baris tombol biasa (kiri dan kanan) - diposisikan di tengah vertikal
+                // Baris tombol biasa (kiri dan kanan)
                 Row(
                   crossAxisAlignment: CrossAxisAlignment.center,
                   children: [
@@ -84,7 +89,7 @@ class _MainScreenState extends State<MainScreen> {
                 Positioned(
                   left: 0,
                   right: 0,
-                  top: -28, // Menaikkan tombol ke atas
+                  top: -28,
                   child: Center(
                     child: _buildCenterNavItem(
                       index: 1,
@@ -102,7 +107,7 @@ class _MainScreenState extends State<MainScreen> {
   }
 
   // =========================
-  // NAV ITEM STANDAR (Kiri & Kanan) - Posisi Tengah Vertikal
+  // NAV ITEM STANDAR (Kiri & Kanan)
   // =========================
   Widget _buildNavItem({
     required int index,
@@ -121,14 +126,14 @@ class _MainScreenState extends State<MainScreen> {
       },
       behavior: HitTestBehavior.opaque,
       child: SizedBox(
-        height: 60, // Tinggi penuh bar
+        height: 60,
         child: Column(
-          mainAxisAlignment: MainAxisAlignment.center, // Posisi tengah vertikal
+          mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Icon(
               isSelected ? activeIcon : icon,
               color: color,
-              size: 22, // Ukuran icon standar
+              size: 22,
             ),
             const SizedBox(height: 4),
             Text(
@@ -145,7 +150,7 @@ class _MainScreenState extends State<MainScreen> {
   }
 
   // =========================
-  // NAV ITEM TENGAH (Scan - Tombol Sedang & Menonjol)
+  // NAV ITEM TENGAH (Scan)
   // =========================
   Widget _buildCenterNavItem({
     required int index,
@@ -163,10 +168,9 @@ class _MainScreenState extends State<MainScreen> {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          // Tombol scan ukuran sedang
           Container(
-            width: 54,  // Ukuran sedang (tidak terlalu besar)
-            height: 54, // Ukuran sedang (tidak terlalu besar)
+            width: 54,
+            height: 54,
             decoration: BoxDecoration(
               shape: BoxShape.circle,
               gradient: isSelected
@@ -193,7 +197,7 @@ class _MainScreenState extends State<MainScreen> {
             child: Icon(
               icon,
               color: Colors.white,
-              size: 26, // Ukuran icon sedang
+              size: 26,
             ),
           ),
           const SizedBox(height: 6),

@@ -187,6 +187,7 @@ class _HomeScreenState extends State<HomeScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               mainAxisAlignment: MainAxisAlignment.end,
               children: [
+                // Greeting badge
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                   decoration: BoxDecoration(
@@ -196,7 +197,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Text(g.emoji, style: const TextStyle(fontSize: 13)),
+                      Text(g.emoji, style: TextStyleHelper.bodySmall.copyWith(fontSize: 13)),
                       const SizedBox(width: 6),
                       Text(
                         g.greeting,
@@ -208,21 +209,24 @@ class _HomeScreenState extends State<HomeScreen> {
                   ),
                 ),
                 const SizedBox(height: 8),
+                // Nama User - Large Display
                 Text(
                   name,
                   style: TextStyleHelper.displaySmall.copyWith(
-                    fontSize: 22,
+                    fontSize: 24,
                     color: Colors.white,
                   ),
                 ),
                 const SizedBox(height: 4),
+                // Tagline - Medium
                 Text(
                   g.tagline,
-                  style: TextStyleHelper.labelMedium.copyWith(
+                  style: TextStyleHelper.bodyMedium.copyWith(
                     color: Colors.white70,
                   ),
                 ),
                 const SizedBox(height: 16),
+                // Remaining calories card
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
                   decoration: BoxDecoration(
@@ -247,23 +251,24 @@ class _HomeScreenState extends State<HomeScreen> {
                           children: [
                             TextSpan(
                               text: '$remaining kcal ',
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontWeight: FontWeight.w800,
+                              style: TextStyleHelper.bold(
                                 fontSize: 14,
+                                color: Colors.white,
                                 letterSpacing: -0.3,
                               ),
                             ),
-                            const TextSpan(
+                            TextSpan(
                               text: 'tersisa dari target ',
-                              style: TextStyle(color: Colors.white70, fontSize: 12),
+                              style: TextStyleHelper.bodySmall.copyWith(
+                                fontSize: 12,
+                                color: Colors.white70,
+                              ),
                             ),
                             TextSpan(
                               text: '$target kcal',
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontWeight: FontWeight.w700,
+                              style: TextStyleHelper.semiBold(
                                 fontSize: 12,
+                                color: Colors.white,
                               ),
                             ),
                           ],
@@ -300,21 +305,23 @@ class _HomeScreenState extends State<HomeScreen> {
               Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
+                  // Label "KALORI HARI INI" - Small & bold
                   Text(
                     'KALORI HARI INI',
-                    style: TextStyleHelper.labelLarge.copyWith(
+                    style: TextStyleHelper.labelMedium.copyWith(
                       letterSpacing: 1.8,
                       color: AppColors.textMedium,
                     ),
                   ),
                   const SizedBox(height: 4),
+                  // Angka kalori - Large Display
                   RichText(
                     text: TextSpan(
                       children: [
                         TextSpan(
                           text: '${appState.todayCalories}',
                           style: TextStyleHelper.displayMedium.copyWith(
-                            fontSize: 30,
+                            fontSize: 32,
                             color: progressColor,
                           ),
                         ),
@@ -334,6 +341,7 @@ class _HomeScreenState extends State<HomeScreen> {
             ],
           ),
           const SizedBox(height: 16),
+          // Progress bar
           ClipRRect(
             borderRadius: BorderRadius.circular(6),
             child: Stack(
@@ -360,13 +368,18 @@ class _HomeScreenState extends State<HomeScreen> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
+              // "Sudah dikonsumsi" - Small
               Text(
                 'Sudah dikonsumsi',
-                style: TextStyleHelper.labelMedium,
+                style: TextStyleHelper.bodySmall.copyWith(
+                  color: AppColors.textMedium,
+                ),
               ),
+              // Persentase - Small
               Text(
                 pct >= 100 ? '⚠ Target tercapai' : '$pct% dari target',
-                style: TextStyleHelper.labelMedium.copyWith(
+                style: TextStyleHelper.bodySmall.copyWith(
+                  fontWeight: FontWeight.w600,
                   color: pct >= 100 ? AppColors.fat : AppColors.textMedium,
                 ),
               ),
@@ -398,9 +411,8 @@ class _HomeScreenState extends State<HomeScreen> {
           Center(
             child: Text(
               '$pct%',
-              style: TextStyleHelper.labelMedium.copyWith(
+              style: TextStyleHelper.titleSmall.copyWith(
                 fontSize: 13,
-                fontWeight: FontWeight.w800,
                 color: color,
               ),
             ),
@@ -479,9 +491,10 @@ class _HomeScreenState extends State<HomeScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          // Label dengan emoji
           Row(
             children: [
-              Text(emoji, style: const TextStyle(fontSize: 15)),
+              Text(emoji, style: TextStyleHelper.bodyMedium),
               const SizedBox(width: 4),
               Text(
                 label,
@@ -493,34 +506,35 @@ class _HomeScreenState extends State<HomeScreen> {
             ],
           ),
           const SizedBox(height: 8),
+          // Nilai - Medium & bold
           RichText(
             text: TextSpan(
               children: [
                 TextSpan(
                   text: current.toStringAsFixed(1),
-                  style: TextStyleHelper.titleMedium.copyWith(
-                    fontSize: 18,
+                  style: TextStyleHelper.titleLarge.copyWith(
+                    fontSize: 20,
                     color: color,
                   ),
                 ),
                 TextSpan(
                   text: '/$unit',
-                  style: TextStyleHelper.captionSmall.copyWith(
-                    fontWeight: FontWeight.w600,
+                  style: TextStyleHelper.bodySmall.copyWith(
                     color: color.withValues(alpha: 0.6),
                   ),
                 ),
               ],
             ),
           ),
+          // Target - Small
           Text(
             '${target.toInt()} $unit target',
             style: TextStyleHelper.captionSmall.copyWith(
-              fontWeight: FontWeight.w600,
               color: AppColors.textLight,
             ),
           ),
           const SizedBox(height: 8),
+          // Progress bar
           ClipRRect(
             borderRadius: BorderRadius.circular(4),
             child: Stack(
@@ -562,6 +576,7 @@ class _HomeScreenState extends State<HomeScreen> {
               child: Icon(icon, size: 16, color: AppColors.primary),
             ),
             const SizedBox(width: 10),
+            // Judul section - Medium & bold
             Text(
               title,
               style: TextStyleHelper.titleMedium.copyWith(
@@ -570,6 +585,7 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
           ],
         ),
+        // "Lihat Semua" - Small
         GestureDetector(
           onTap: () {
             Navigator.push(
@@ -636,7 +652,6 @@ class _HomeScreenState extends State<HomeScreen> {
     final carbs = (item['carbs'] as num?)?.toStringAsFixed(1) ?? '0.0';
     final fat = (item['fat'] as num?)?.toStringAsFixed(1) ?? '0.0';
     
-    // Cek apakah file gambar valid
     bool hasValidImage = false;
     File? imageFile;
     if (imagePath != null && imagePath.isNotEmpty) {
@@ -675,6 +690,7 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
           child: Row(
             children: [
+              // Thumbnail
               ClipRRect(
                 borderRadius: BorderRadius.circular(16), 
                 child: Container(
@@ -700,12 +716,11 @@ class _HomeScreenState extends State<HomeScreen> {
               
               const SizedBox(width: 14),
 
-              // Info Makanan
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // Nama Makanan
+                    // Nama Makanan - Medium & bold
                     Text(
                       name,
                       maxLines: 1,
@@ -717,7 +732,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     ),
                     const SizedBox(height: 6),
                     
-                    // Waktu Scan
+                    // Waktu scan - Caption
                     Row(
                       children: [
                         Icon(
@@ -736,7 +751,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     ),
                     const SizedBox(height: 8),
                     
-                    // Kalori & Nutrisi
+                    // Badges (kalori, protein, carbs, fat)
                     Row(
                       children: [
                         // Kalori badge
@@ -766,7 +781,7 @@ class _HomeScreenState extends State<HomeScreen> {
                           ),
                         ),
                         const SizedBox(width: 8),
-                        // Protein
+                        // Protein badge
                         Container(
                           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                           decoration: BoxDecoration(
@@ -782,7 +797,7 @@ class _HomeScreenState extends State<HomeScreen> {
                           ),
                         ),
                         const SizedBox(width: 6),
-                        // Karbo
+                        // Karbo badge
                         Container(
                           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                           decoration: BoxDecoration(
@@ -798,7 +813,7 @@ class _HomeScreenState extends State<HomeScreen> {
                           ),
                         ),
                         const SizedBox(width: 6),
-                        // Lemak
+                        // Lemak badge
                         Container(
                           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                           decoration: BoxDecoration(
@@ -855,8 +870,8 @@ class _HomeScreenState extends State<HomeScreen> {
             const SizedBox(height: 2),
             Text(
               name.isNotEmpty ? name[0].toUpperCase() : '?',
-              style: TextStyleHelper.titleMedium.copyWith(
-                fontSize: 16,
+              style: TextStyleHelper.titleLarge.copyWith(
+                fontSize: 18,
                 color: AppColors.primary,
               ),
             ),
@@ -894,6 +909,7 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
           ),
           const SizedBox(height: 16),
+          // Judul - Medium & bold
           Text(
             'Belum Ada Riwayat Scan',
             style: TextStyleHelper.titleMedium.copyWith(
@@ -901,6 +917,7 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
           ),
           const SizedBox(height: 8),
+          // Subtitle - Body small
           Text(
             'Mulai scan makanan Anda sekarang\ndan lacak nutrisi harian',
             textAlign: TextAlign.center,
