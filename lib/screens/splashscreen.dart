@@ -82,6 +82,7 @@ class _SplashScreenState extends State<SplashScreen>
     _fadeController.forward();
     _textController.forward();
     
+    // Panggil navigasi setelah delay
     _navigateToNextScreen();
   }
   
@@ -89,20 +90,47 @@ class _SplashScreenState extends State<SplashScreen>
     // Tunggu 2.5 detik untuk animasi splash screen
     await Future.delayed(const Duration(milliseconds: 2500));
     
-    // Cek apakah user sudah memiliki profile
-    final userProfile = await _dbManager.getUserProfile();
-    final hasUserProfile = userProfile != null;
+    debugPrint('🔍 SplashScreen: Memeriksa user profile di database...');
     
-    if (mounted) {
-      SystemChrome.setEnabledSystemUIMode(SystemUiMode.manual,
-        overlays: [SystemUiOverlay.top, SystemUiOverlay.bottom],
-      );
+    try {
+      // Pastikan database siap
+      final isDbReady = await _dbManager.isDatabaseOpen();
+      if (!isDbReady) {
+        debugPrint('⚠️ Database belum siap, inisialisasi ulang...');
+        await _dbManager.init();
+      }
       
+      // Cek apakah user profile sudah ada di database
+      final userProfile = await _dbManager.getUserProfile();
+      final hasUserProfile = userProfile != null;
+      
+      debugPrint('📊 Hasil pengecekan user profile: $hasUserProfile');
       if (hasUserProfile) {
-        // User sudah pernah onboarding, langsung ke MainPage
-        Navigator.pushReplacementNamed(context, '/main');
+        debugPrint('✅ User profile ditemukan: ${userProfile['name']}');
       } else {
-        // User belum onboarding, ke OnboardingScreen
+        debugPrint('❌ User profile tidak ditemukan, akan menuju onboarding');
+      }
+      
+      if (mounted) {
+        SystemChrome.setEnabledSystemUIMode(SystemUiMode.manual,
+          overlays: [SystemUiOverlay.top, SystemUiOverlay.bottom],
+        );
+        
+        if (hasUserProfile) {
+          // User sudah memiliki profile, langsung ke MainScreen
+          debugPrint('➡️ Navigasi ke /main');
+          Navigator.pushReplacementNamed(context, '/main');
+        } else {
+          // User belum memiliki profile, ke OnboardingScreen
+          debugPrint('➡️ Navigasi ke /onboarding');
+          Navigator.pushReplacementNamed(context, '/onboarding');
+        }
+      }
+    } catch (e) {
+      debugPrint('❌ Error saat mengecek user profile: $e');
+      // Jika error, anggap belum ada profile dan arahkan ke onboarding
+      if (mounted) {
+        debugPrint('➡️ Error terjadi, navigasi ke /onboarding sebagai fallback');
         Navigator.pushReplacementNamed(context, '/onboarding');
       }
     }
@@ -141,7 +169,7 @@ class _SplashScreenState extends State<SplashScreen>
               ),
               child: Stack(
                 children: [
-                  // Dekorasi lingkaran latar belakang
+                  // Dekorasi lingkaran latar belakang (tetap sama seperti kode Anda)
                   Positioned(
                     top: -100,
                     right: -100,

@@ -1,3 +1,4 @@
+// lib/data/database_manager.dart
 import 'package:flutter/foundation.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:sqflite/sqflite.dart';
@@ -148,18 +149,18 @@ class DatabaseManager {
       await db.execute('CREATE INDEX idx_scan_history_date ON scan_history(scanned_at)');
       debugPrint('✅ Index-index berhasil dibuat');
 
-      // Insert default user profile
-      final now = DateTime.now().millisecondsSinceEpoch;
-      await db.insert('user_profile', {
-        'name': 'Pengguna',
-        'target_calories': 2000,
-        'target_protein': 50,
-        'target_carbs': 250,
-        'target_fat': 65,
-        'created_at': now,
-        'updated_at': now,
-      });
-      debugPrint('✅ Default user_profile ditambahkan');
+      // // Insert default user profile
+      // final now = DateTime.now().millisecondsSinceEpoch;
+      // await db.insert('user_profile', {
+      //   'name': 'Pengguna',
+      //   'target_calories': 2000,
+      //   'target_protein': 50,
+      //   'target_carbs': 250,
+      //   'target_fat': 65,
+      //   'created_at': now,
+      //   'updated_at': now,
+      // });
+      // debugPrint('✅ Default user_profile ditambahkan');
 
       debugPrint('🎉 Semua tabel berhasil dibuat!');
       

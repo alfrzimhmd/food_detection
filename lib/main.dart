@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import 'screens/splashscreen.dart';
 import 'screens/onboarding_screen.dart';
 import 'screens/main_screen.dart';
@@ -13,7 +12,7 @@ void main() async {
   // Load nutrition data
   await NutritionData.loadData();
   
-  // Initialize database manager (WAJIB sebelum cek onboarding)
+  // Initialize database manager
   final dbManager = DatabaseManager();
   await dbManager.init();
 
@@ -24,28 +23,16 @@ void main() async {
     debugPrint('❌ Database failed to open');
   }
   
-  // Cek apakah user sudah memiliki profile di database
-  final userProfile = await dbManager.getUserProfile();
-  final hasUserProfile = userProfile != null;
-  
-  // Jika tidak ada profile, onboarding belum selesai
-  final prefs = await SharedPreferences.getInstance();
-  await prefs.setBool('onboarding_completed', hasUserProfile);
-  
   SystemChrome.setPreferredOrientations([
     DeviceOrientation.portraitUp,
     DeviceOrientation.portraitDown,
   ]);
   
-  runApp(FoodDetectionApp(
-    isOnboardingCompleted: hasUserProfile,
-  ));
+  runApp(const FoodDetectionApp()); // Hapus parameter
 }
 
 class FoodDetectionApp extends StatelessWidget {
-  final bool isOnboardingCompleted;
-  
-  const FoodDetectionApp({super.key, required this.isOnboardingCompleted});
+  const FoodDetectionApp({super.key}); // Hapus parameter isOnboardingCompleted
 
   @override
   Widget build(BuildContext context) {
@@ -67,7 +54,7 @@ class FoodDetectionApp extends StatelessWidget {
         ),
         useMaterial3: true,
       ),
-      initialRoute: '/splash',
+      initialRoute: '/splash', // Selalu mulai dari splash screen
       routes: {
         '/onboarding': (context) => const OnboardingScreen(),
         '/splash': (context) => const SplashScreen(),
