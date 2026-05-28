@@ -448,16 +448,53 @@ class DatabaseManager {
     debugPrint('🔵 getAllScanHistory - mulai mengambil data...');
     try {
       final db = await database;
-      final rows = await db.query(
-        'scan_history',
-        orderBy: 'scanned_at DESC',
-      );
+      
+      // 🔥 Gunakan rawQuery untuk performa lebih baik
+      final List<Map<String, dynamic>> rows = await db.rawQuery('''
+        SELECT 
+          id, image_path, label, indonesian_name, 
+          calories, protein, carbs, fat, 
+          fiber, sugar, sodium, 
+          health_level, health_tip, warning, 
+          scanned_at
+        FROM scan_history 
+        ORDER BY scanned_at DESC
+      ''');
       
       debugPrint('✅ getAllScanHistory - berhasil mengambil ${rows.length} record');
-      if (rows.isNotEmpty) {
-        debugPrint('📊 Contoh data pertama: ${rows.first['indonesian_name']}');
+      
+      if (rows.isEmpty) return [];
+      
+      // 🔥 Konversi manual dengan error handling
+      final List<Map<String, dynamic>> safeRows = [];
+      for (var row in rows) {
+        try {
+          final safeRow = <String, dynamic>{};
+          for (final entry in row.entries) {
+            final key = entry.key;
+            final value = entry.value;
+            
+            if (value == null) {
+              if (key == 'calories' || key == 'id' || key == 'scanned_at') {
+                safeRow[key] = 0;
+              } else if (key == 'protein' || key == 'carbs' || key == 'fat' || 
+                        key == 'fiber' || key == 'sugar' || key == 'sodium') {
+                safeRow[key] = 0.0;
+              } else {
+                safeRow[key] = '';
+              }
+            } else {
+              safeRow[key] = value;
+            }
+          }
+          safeRows.add(safeRow);
+        } catch (e) {
+          debugPrint('⚠️ Error converting row: $e');
+          continue;
+        }
       }
-      return _safeRows(rows);
+      
+      return safeRows;
       
     } catch (e) {
       debugPrint('❌ getAllScanHistory error: $e');

@@ -1,3 +1,4 @@
+// lib/data/nutrition_data.dart
 import 'dart:convert';
 import 'package:flutter/services.dart';
 import 'package:flutter/material.dart';

@@ -1,3 +1,6 @@
+// lib/providers/app_state.dart
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import '../data/database_manager.dart';
 import '../data/nutrition_data.dart';
@@ -13,6 +16,9 @@ class AppState extends ChangeNotifier {
   int _todayCalories = 0;
   List<Map<String, dynamic>> _scanHistory = [];
   List<Map<String, dynamic>> _recentHistory = [];
+  
+  // 🔥 Flag untuk mencegah multiple refresh
+  bool _isRefreshing = false;
   
   // Getters
   bool get isLoading => _isLoading;
@@ -127,11 +133,53 @@ class AppState extends ChangeNotifier {
     }
   }
   
-  // Refresh data (dipanggil setelah scan atau perubahan data)
+  // Refresh data dengan mencegah multiple refresh
   Future<void> refresh() async {
+    if (_isRefreshing) {
+      debugPrint('⚠️ Refresh already in progress, skipping...');
+      return;
+    }
+    
+    _isRefreshing = true;
     debugPrint('🔄 AppState.refresh() called - timestamp: ${DateTime.now()}');
-    await loadHomeData();
-    debugPrint('✅ AppState.refresh() completed - history length: ${_scanHistory.length}');
+    
+    try {
+      // 🔥 JANGAN set _isLoading = true dulu, biar tidak rebuild terlalu sering
+      // await loadHomeData();
+      
+      // 🔥 Load data dengan aman
+      if (!_isOnboarded) return;
+      
+      final results = await Future.wait([
+        _dbManager.getUserProfile(),
+        _dbManager.getTodayNutritionSummary(),
+        _dbManager.getTodayTotalCalories(),
+        _dbManager.getAllScanHistory(),
+      ]).timeout(
+        const Duration(seconds: 5),
+        onTimeout: () {
+          debugPrint('⚠️ Database timeout, returning default values');
+          return [null, {}, 0, []];
+        },
+      );
+      
+      _userProfile = results[0] as Map<String, dynamic>?;
+      _todayNutrition = (results[1] as Map<String, double>?) ?? {};
+      _todayCalories = (results[2] as int?) ?? 0;
+      _scanHistory = (results[3] as List<Map<String, dynamic>>?) ?? [];
+      _recentHistory = _scanHistory.take(5).toList();
+      
+      debugPrint('📊 AppState: Loaded ${_scanHistory.length} history items');
+      
+      // 🔥 Notify listeners ONLY after all data is loaded
+      notifyListeners();
+      
+    } catch (e, stacktrace) {
+      debugPrint('❌ AppState.refresh() error: $e');
+      debugPrint('📚 Stacktrace: $stacktrace');
+    } finally {
+      _isRefreshing = false;
+    }
   }
   
   // Save scan history and auto refresh
@@ -150,7 +198,6 @@ class AppState extends ChangeNotifier {
     String? healthTip,
     String? warning,
   }) async {
-
     debugPrint('💾 AppState.saveScanHistory() called for: $indonesianName');
     
     final id = await _dbManager.saveScanHistory(
@@ -169,7 +216,6 @@ class AppState extends ChangeNotifier {
       warning: warning,
     );
     
-    // 🔥 Auto refresh setelah scan berhasil
     if (id != -1) {
       debugPrint('✅ Scan saved with id=$id, calling refresh...');
       await refresh();
@@ -201,5 +247,69 @@ class AppState extends ChangeNotifier {
   // Get health level helper
   String getHealthLevel(String label) {
     return NutritionData.getHealthLevel(label).toString().split('.').last;
+  }
+
+  Future<void> deleteScanHistory(int id) async {
+    debugPrint('🗑️ AppState.deleteScanHistory: $id');
+    
+    try {
+      // 1. Hapus dari database
+      await _dbManager.deleteScanHistory(id);
+      debugPrint('✅ Database record deleted');
+      
+      // 2. Bersihkan cache gambar
+      await _clearImageCache();
+      
+      // 3. 🔥 Hapus dari memory cache dulu (optimistic update)
+      _scanHistory = _scanHistory.where((item) => item['id'] != id).toList();
+      _recentHistory = _scanHistory.take(5).toList();
+      notifyListeners(); // UI langsung update
+      
+      // 4. 🔥 Refresh di background (tanpa nunggu)
+      // Gunakan unawaited agar tidak blocking
+      unawaited(_backgroundRefresh());
+      
+    } catch (e) {
+      debugPrint('❌ DeleteScanHistory error: $e');
+      // Jika gagal, refresh ulang untuk sync
+      await refresh();
+      rethrow;
+    }
+  }
+
+  Future<void> _backgroundRefresh() async {
+    // Tunggu sebentar sebelum refresh
+    await Future.delayed(const Duration(milliseconds: 500));
+    try {
+      await refresh();
+    } catch (e) {
+      debugPrint('⚠️ Background refresh failed: $e');
+    }
+  }
+
+  Future<void> _clearImageCache() async {
+    // Bersihkan cache gambar dari memory
+    try {
+      PaintingBinding.instance.imageCache.clear();
+      PaintingBinding.instance.imageCache.clearLiveImages();
+      debugPrint('🖼️ Image cache cleared');
+    } catch (e) {
+      debugPrint('⚠️ Failed to clear image cache: $e');
+    }
+  }
+
+  // Delete all scan history (tanpa menghapus user profile)
+  Future<void> deleteAllScanHistory() async {
+    debugPrint('🗑️ AppState.deleteAllScanHistory');
+    
+    try {
+      await _dbManager.resetAllData();
+      await _clearImageCache();
+      await Future.delayed(const Duration(milliseconds: 100));
+      await refresh();
+    } catch (e) {
+      debugPrint('❌ DeleteAllScanHistory error: $e');
+      rethrow;
+    }
   }
 }

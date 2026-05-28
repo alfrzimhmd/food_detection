@@ -224,7 +224,7 @@ class _SplashScreenState extends State<SplashScreen>
                               child: Column(
                                 children: [
                                   Text(
-                                    'Food Detection',
+                                    'NutriScanAI',
                                     style: TextStyleHelper.displayMedium.copyWith(
                                       color: Colors.white,
                                       letterSpacing: 1.5,

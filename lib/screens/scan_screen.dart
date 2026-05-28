@@ -1,4 +1,5 @@
 // lib/screens/scan_screen.dart
+import 'dart:async';
 import 'dart:io';
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
@@ -6,6 +7,7 @@ import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
 import '../models/hybrid_classifier.dart';
+import '../data/database_manager.dart';
 import '../data/nutrition_data.dart';
 import '../providers/app_state.dart';
 import '../utils/app_colors.dart';
@@ -31,6 +33,12 @@ class _ScanScreenState extends State<ScanScreen> with TickerProviderStateMixin {
   Prediction? _predictionResult;
   int _processingStep = 0;
   bool _showCatalogue = true;
+  
+  // 🔥 Untuk menyimpan data sementara
+  List<int>? _pendingImageBytes;
+  // ignore: unused_field
+  String? _pendingImagePath;  // Digunakan untuk menyimpan path gambar sementara, akan digunakan saat update history
+  int? _lastSavedHistoryId;
 
   // Result card animation
   late final AnimationController _resultCtrl;
@@ -114,7 +122,9 @@ class _ScanScreenState extends State<ScanScreen> with TickerProviderStateMixin {
 
       final size = await picked.length();
       if (size > 3 * 1024 * 1024) {
-        _showSnackBar('Gambar terlalu besar (maks 3 MB)', isError: true);
+        if (mounted) {
+          _showSnackBar('Gambar terlalu besar (maks 3 MB)', isError: true);
+        }
         return;
       }
 
@@ -123,10 +133,88 @@ class _ScanScreenState extends State<ScanScreen> with TickerProviderStateMixin {
         _selectedImage = File(picked.path);
         _predictionResult = null;
         _processingStep = 0;
+        _pendingImageBytes = null;
+        _pendingImagePath = null;
+        _lastSavedHistoryId = null;
       });
     } catch (e) {
       debugPrint('Pick image error: $e');
-      _showSnackBar('Gagal mengambil gambar', isError: true);
+      if (mounted) {
+        _showSnackBar('Gagal mengambil gambar', isError: true);
+      }
+    }
+  }
+
+  // 🔥 Method untuk menyimpan history dengan hasil prediksi awal
+  Future<void> _saveInitialScanHistory({
+    required String label,
+    required String imagePath,
+  }) async {
+    final fd = NutritionData.getFoodData(label);
+    final appState = Provider.of<AppState>(context, listen: false);
+    
+    debugPrint('💾 Saving initial scan history: label=$label');
+    
+    final id = await appState.saveScanHistory(
+      imagePath: imagePath,
+      label: label,
+      indonesianName: fd.indonesianName,
+      calories: fd.calories,
+      protein: fd.protein,
+      carbs: fd.carbs,
+      fat: fd.fat,
+      fiber: fd.fiber,
+      sugar: fd.sugar,
+      sodium: fd.sodium,
+      healthLevel: fd.healthLevel.toString().split('.').last,
+      healthTip: fd.healthTip,
+      warning: fd.warning,
+    );
+    
+    _lastSavedHistoryId = id;
+    debugPrint('✅ Initial scan history saved with id=$id');
+  }
+
+  // 🔥 Method untuk mengupdate history dengan hasil koreksi
+  Future<void> _updateHistoryWithCorrection({
+    required String correctedLabel,
+    required int historyId,
+  }) async {
+    final fd = NutritionData.getFoodData(correctedLabel);
+    final dbManager = DatabaseManager();
+    
+    debugPrint('✏️ Updating history id=$historyId with correction: $correctedLabel');
+    
+    final db = await dbManager.database;
+    final now = DateTime.now().millisecondsSinceEpoch;
+    
+    await db.update(
+      'scan_history',
+      {
+        'label': correctedLabel,
+        'indonesian_name': fd.indonesianName,
+        'calories': fd.calories,
+        'protein': fd.protein,
+        'carbs': fd.carbs,
+        'fat': fd.fat,
+        'fiber': fd.fiber,
+        'sugar': fd.sugar,
+        'sodium': fd.sodium,
+        'health_level': fd.healthLevel.toString().split('.').last,
+        'health_tip': fd.healthTip,
+        'warning': fd.warning,
+        'scanned_at': now,
+      },
+      where: 'id = ?',
+      whereArgs: [historyId],
+    );
+    
+    debugPrint('✅ History updated with correction');
+    
+    // Refresh AppState agar UI terupdate
+    if (mounted) {
+      final appState = Provider.of<AppState>(context, listen: false);
+      await appState.refresh();
     }
   }
 
@@ -140,6 +228,9 @@ class _ScanScreenState extends State<ScanScreen> with TickerProviderStateMixin {
     setState(() {
       _isPredicting = true;
       _processingStep = 1;
+      _pendingImageBytes = null;
+      _pendingImagePath = null;
+      _lastSavedHistoryId = null;
     });
 
     try {
@@ -148,6 +239,8 @@ class _ScanScreenState extends State<ScanScreen> with TickerProviderStateMixin {
       setState(() => _processingStep = 2);
 
       final bytes = await _selectedImage!.readAsBytes();
+      _pendingImageBytes = bytes;
+      _pendingImagePath = _selectedImage!.path;
 
       await Future.delayed(const Duration(milliseconds: 400));
       if (!mounted) return;
@@ -156,24 +249,11 @@ class _ScanScreenState extends State<ScanScreen> with TickerProviderStateMixin {
       final prediction = await _classifier.predictWithTimeout(bytes);
       if (!mounted) return;
 
+      // Simpan history dengan prediksi awal
       if (!prediction.hasError && !prediction.isNotFood) {
-        final fd = NutritionData.getFoodData(prediction.label);
-        
-        final appState = Provider.of<AppState>(context, listen: false);
-        await appState.saveScanHistory(
-          imagePath: _selectedImage!.path,
+        await _saveInitialScanHistory(
           label: prediction.label,
-          indonesianName: fd.indonesianName,
-          calories: fd.calories,
-          protein: fd.protein,
-          carbs: fd.carbs,
-          fat: fd.fat,
-          fiber: fd.fiber,
-          sugar: fd.sugar,
-          sodium: fd.sodium,
-          healthLevel: fd.healthLevel.toString().split('.').last,
-          healthTip: fd.healthTip,
-          warning: fd.warning,
+          imagePath: _selectedImage!.path,
         );
       }
 
@@ -186,9 +266,9 @@ class _ScanScreenState extends State<ScanScreen> with TickerProviderStateMixin {
 
       if (prediction.hasError) {
         if (prediction.isNotFood) {
-          _showNotFoodDialog();
+          if (mounted) _showNotFoodDialog();
         } else {
-          _showErrorDialog(prediction.errorMessage ?? 'Terjadi kesalahan.');
+          if (mounted) _showErrorDialogWithContext(context, prediction.errorMessage ?? 'Terjadi kesalahan.');
         }
         _resetAll();
       } else {
@@ -197,11 +277,13 @@ class _ScanScreenState extends State<ScanScreen> with TickerProviderStateMixin {
     } catch (e) {
       debugPrint('Predict error: $e');
       _stopScanAnimations();
-      setState(() {
-        _isPredicting = false;
-        _processingStep = 0;
-      });
-      _showErrorDialog('Terjadi kesalahan. Silakan coba lagi.');
+      if (mounted) {
+        setState(() {
+          _isPredicting = false;
+          _processingStep = 0;
+        });
+        _showErrorDialogWithContext(context, 'Terjadi kesalahan. Silakan coba lagi.');
+      }
     }
   }
 
@@ -213,6 +295,9 @@ class _ScanScreenState extends State<ScanScreen> with TickerProviderStateMixin {
       _predictionResult = null;
       _processingStep = 0;
       _isPredicting = false;
+      _pendingImageBytes = null;
+      _pendingImagePath = null;
+      _lastSavedHistoryId = null;
     });
   }
 
@@ -265,16 +350,20 @@ class _ScanScreenState extends State<ScanScreen> with TickerProviderStateMixin {
     );
   }
 
-  void _showErrorDialog(String msg) {
+  void _showErrorDialogWithContext(BuildContext context, String msg) {
+    if (!mounted) return;
     showDialog(
       context: context,
       builder: (_) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-        title: const Text('Gagal Mendeteksi'),
+        title: Text('Gagal', style: TextStyleHelper.titleMedium),
         content: Text(msg, style: TextStyleHelper.bodyMedium),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(context),
+            onPressed: () {
+              Navigator.pop(context);
+              _resetAll();
+            },
             child: Text(
               'OK',
               style: TextStyleHelper.bold(color: AppColors.primary),
@@ -286,11 +375,12 @@ class _ScanScreenState extends State<ScanScreen> with TickerProviderStateMixin {
   }
 
   void _showNotFoodDialog() {
+    if (!mounted) return;
     showDialog(
       context: context,
       builder: (_) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-        title: const Text('Bukan Makanan'),
+        title: Text('Bukan Makanan', style: TextStyleHelper.titleMedium),
         content: Text(
           'Gambar yang Anda unggah tidak dikenali sebagai makanan. Coba foto makanan dengan pencahayaan yang lebih baik.',
           style: TextStyleHelper.bodyMedium,
@@ -314,28 +404,358 @@ class _ScanScreenState extends State<ScanScreen> with TickerProviderStateMixin {
       return;
     }
 
+    final rootContext = context;
+    
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (_) => _CorrectionSheet(
+      builder: (context) => _CorrectionSheet(
         classifier: _classifier,
         selectedImage: _selectedImage,
         prediction: _predictionResult!,
-        onCorrected: (label) async {
-          _showSnackBar('Koreksi tersimpan! Model akan belajar.');
-          _resetAll();
+        onCorrected: (correctedLabel, sheetContext) async {
+          debugPrint('✏️ Correction callback received: $correctedLabel');
+          
+          // 🔥 Tampilkan success dialog IMMEDIATELY (tanpa nunggu proses selesai)
+          if (mounted) {
+            _showSuccessCorrectionDialog(rootContext, correctedLabel);
+          }
+          
+          // Jalankan proses penyimpanan di background (tanpa nunggu)
+          // Gunakan unawaited agar tidak blocking UI
+          unawaited(_processCorrectionInBackground(correctedLabel));
         },
+      ),
+    );
+  }
+
+  // 🔥 Method baru untuk proses background
+  Future<void> _processCorrectionInBackground(String correctedLabel) async {
+    try {
+      // 1. Simpan koreksi ke database corrections
+      if (_pendingImageBytes != null) {
+        await _classifier.learnFromFeedback(
+          imageBytes: _pendingImageBytes!,
+          originalPrediction: _predictionResult!.label,
+          correctLabel: correctedLabel,
+        );
+      }
+      
+      // 2. Update history yang sudah tersimpan
+      if (_lastSavedHistoryId != null) {
+        await _updateHistoryWithCorrection(
+          correctedLabel: correctedLabel,
+          historyId: _lastSavedHistoryId!,
+        );
+      }
+      
+      debugPrint('✅ Background correction process completed');
+    } catch (e) {
+      debugPrint('❌ Background correction error: $e');
+      if (mounted) {
+        _showSnackBar('Gagal menyimpan koreksi di background', isError: true);
+      }
+    }
+  }
+
+  void _showSuccessCorrectionDialog(BuildContext context, String correctedLabel) {
+    if (!mounted) {
+      debugPrint('⚠️ Widget not mounted, cannot show dialog');
+      return;
+    }
+    
+    final correctedFood = NutritionData.getFoodData(correctedLabel);
+    final originalLabel = _predictionResult!.label;
+    
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      useRootNavigator: true,
+      builder: (dialogContext) => Dialog(
+        backgroundColor: Colors.transparent,
+        child: Container(
+          width: MediaQuery.of(context).size.width - 40,
+          constraints: const BoxConstraints(
+            maxHeight: 500, // Batasi tinggi maksimal
+          ),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(32),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.12),
+                blurRadius: 24,
+                offset: const Offset(0, 8),
+              ),
+            ],
+          ),
+          child: SingleChildScrollView(
+            physics: const BouncingScrollPhysics(),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // Icon sukses
+                Container(
+                  width: 72,
+                  height: 72,
+                  margin: const EdgeInsets.only(top: 24),
+                  decoration: BoxDecoration(
+                    gradient: const LinearGradient(
+                      colors: [AppColors.success, AppColors.carbs],
+                    ),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(
+                    Icons.check_rounded,
+                    color: Colors.white,
+                    size: 40,
+                  ),
+                ),
+                const SizedBox(height: 16),
+                
+                Text(
+                  'Koreksi Tersimpan!',
+                  style: TextStyleHelper.headline3.copyWith(
+                    fontSize: 22,
+                    color: AppColors.success,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                
+                Text(
+                  'Terima kasih atas koreksi Anda!',
+                  textAlign: TextAlign.center,
+                  style: TextStyleHelper.titleMedium.copyWith(
+                    color: AppColors.textDark,
+                  ),
+                ),
+                const SizedBox(height: 20),
+                
+                // Detail koreksi - PERBAIKAN UNTUK TEKS PANJANG
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  margin: const EdgeInsets.symmetric(horizontal: 20, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: AppColors.background,
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(
+                      color: AppColors.success.withValues(alpha: 0.2),
+                    ),
+                  ),
+                  child: Column(
+                    children: [
+                      // Label Sebelum
+                      Row(
+                        children: [
+                          Container(
+                            width: 32,
+                            height: 32,
+                            decoration: BoxDecoration(
+                              color: AppColors.fat.withValues(alpha: 0.1),
+                              shape: BoxShape.circle,
+                            ),
+                            child: const Icon(Icons.close_rounded, color: AppColors.fat, size: 16),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'Sebelum',
+                                  style: TextStyleHelper.captionSmall.copyWith(
+                                    color: AppColors.textLight,
+                                  ),
+                                ),
+                                Text(
+                                  originalLabel,
+                                  style: TextStyleHelper.bodySmall.copyWith(
+                                    color: AppColors.textDark,
+                                    decoration: TextDecoration.lineThrough,
+                                  ),
+                                  maxLines: 2,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                      
+                      const SizedBox(height: 12),
+                      
+                      // Panah
+                      Container(
+                        padding: const EdgeInsets.all(6),
+                        decoration: BoxDecoration(
+                          color: AppColors.primary.withValues(alpha: 0.1),
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Icon(
+                          Icons.arrow_downward_rounded,
+                          color: AppColors.primary,
+                          size: 16,
+                        ),
+                      ),
+                      
+                      const SizedBox(height: 12),
+                      
+                      // Label Sesudah
+                      Row(
+                        children: [
+                          Container(
+                            width: 32,
+                            height: 32,
+                            decoration: BoxDecoration(
+                              color: AppColors.success.withValues(alpha: 0.1),
+                              shape: BoxShape.circle,
+                            ),
+                            child: const Icon(Icons.check_rounded, color: AppColors.success, size: 16),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'Sesudah',
+                                  style: TextStyleHelper.captionSmall.copyWith(
+                                    color: AppColors.textLight,
+                                  ),
+                                ),
+                                Text(
+                                  correctedFood.indonesianName,
+                                  style: TextStyleHelper.bodySmall.copyWith(
+                                    fontWeight: FontWeight.w600,
+                                    color: AppColors.success,
+                                  ),
+                                  maxLines: 2,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+                
+                const SizedBox(height: 16),
+                
+                // Pesan pembelajaran
+                Container(
+                  padding: const EdgeInsets.all(14),
+                  margin: const EdgeInsets.symmetric(horizontal: 20),
+                  decoration: BoxDecoration(
+                    color: AppColors.glow.withValues(alpha: 0.3),
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Icon(
+                        Icons.auto_awesome_rounded,
+                        color: AppColors.primary,
+                        size: 18,
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Text(
+                          'Model AI akan belajar dari koreksi ini untuk meningkatkan akurasi deteksi.',
+                          style: TextStyleHelper.captionSmall.copyWith(
+                            color: AppColors.textMedium,
+                            height: 1.4,
+                          ),
+                          maxLines: 3,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                
+                const SizedBox(height: 20),
+                
+                // Tombol
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 20),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: OutlinedButton(
+                          onPressed: () {
+                            Navigator.pop(dialogContext);
+                            if (mounted) _resetAll();
+                          },
+                          style: OutlinedButton.styleFrom(
+                            side: const BorderSide(color: AppColors.divider),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(16),
+                            ),
+                            padding: const EdgeInsets.symmetric(vertical: 12),
+                          ),
+                          child: Text(
+                            'Kembali',
+                            style: TextStyleHelper.labelMedium.copyWith(
+                              color: AppColors.textMedium,
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: ElevatedButton(
+                          onPressed: () {
+                            Navigator.pop(dialogContext);
+                            if (mounted) _resetAll();
+                          },
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: AppColors.primary,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(16),
+                            ),
+                            padding: const EdgeInsets.symmetric(vertical: 12),
+                          ),
+                          child: Text(
+                            'Scan Lagi',
+                            style: TextStyleHelper.labelMedium.copyWith(
+                              color: Colors.white,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                
+                const SizedBox(height: 16),
+                
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 20),
+                  child: Text(
+                    'Coba scan ulang gambar yang sama untuk melihat hasilnya',
+                    textAlign: TextAlign.center,
+                    style: TextStyleHelper.captionSmall.copyWith(
+                      color: AppColors.textLight,
+                    ),
+                    maxLines: 2,
+                  ),
+                ),
+                
+                const SizedBox(height: 20),
+              ],
+            ),
+          ),
+        ),
       ),
     );
   }
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    
     return Scaffold(
-      backgroundColor: isDark ? AppColors.backgroundDark : AppColors.background,
+      backgroundColor: AppColors.background,
       body: CustomScrollView(
         physics: const BouncingScrollPhysics(),
         slivers: [
@@ -400,41 +820,6 @@ class _ScanScreenState extends State<ScanScreen> with TickerProviderStateMixin {
           ),
         ],
       ),
-      actions: [
-        IconButton(
-          icon: Container(
-            width: 36,
-            height: 36,
-            decoration: BoxDecoration(
-              color: Colors.white.withValues(alpha: 0.15),
-              borderRadius: BorderRadius.circular(10),
-            ),
-            child: Icon(
-              _showCatalogue ? Icons.view_list_rounded : Icons.view_list_rounded,
-              color: Colors.white,
-              size: 18,
-            ),
-          ),
-          onPressed: () => setState(() => _showCatalogue = !_showCatalogue),
-        ),
-        if (_predictionResult != null || _selectedImage != null)
-          Padding(
-            padding: const EdgeInsets.only(right: 8),
-            child: GestureDetector(
-              onTap: _resetAll,
-              child: Container(
-                width: 36,
-                height: 36,
-                decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: 0.15),
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: const Icon(Icons.refresh_rounded, color: Colors.white, size: 18),
-              ),
-            ),
-          ),
-        const SizedBox(width: 8),
-      ],
     );
   }
 
@@ -544,11 +929,9 @@ class _ScanScreenState extends State<ScanScreen> with TickerProviderStateMixin {
   }
 
   Widget _buildCameraCard() {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    
     return Container(
       decoration: BoxDecoration(
-        color: isDark ? AppColors.cardBackgroundDark : AppColors.cardBackground,
+        color: AppColors.cardBackground,
         borderRadius: BorderRadius.circular(24),
         boxShadow: [
           BoxShadow(
@@ -663,7 +1046,7 @@ class _ScanScreenState extends State<ScanScreen> with TickerProviderStateMixin {
           const SizedBox(height: 14),
           Text(
             'Belum ada gambar',
-            style: TextStyleHelper.titleSmall.copyWith(
+            style: TextStyleHelper.titleMedium.copyWith(
               color: AppColors.textMedium,
             ),
           ),
@@ -705,14 +1088,16 @@ class _ScanScreenState extends State<ScanScreen> with TickerProviderStateMixin {
               color: Colors.black.withValues(alpha: 0.5),
               borderRadius: BorderRadius.circular(20),
             ),
-            child: const Row(
+            child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Icon(Icons.check_circle_rounded, size: 13, color: Color(0xFF4ADE80)),
-                SizedBox(width: 5),
+                const Icon(Icons.check_circle_rounded, size: 13, color: Color(0xFF4ADE80)),
+                const SizedBox(width: 5),
                 Text(
                   'Gambar siap',
-                  style: TextStyle(fontSize: 11, color: Colors.white, fontWeight: FontWeight.w500),
+                  style: TextStyleHelper.captionSmall.copyWith(
+                    color: Colors.white,
+                  ),
                 ),
               ],
             ),
@@ -738,7 +1123,7 @@ class _ScanScreenState extends State<ScanScreen> with TickerProviderStateMixin {
         if (_scanLineCtrl != null)
           AnimatedBuilder(
             animation: _scanLineCtrl!,
-            builder: (_, _) {
+            builder: (_, child) {
               final y = _scanLineCtrl!.value;
               return Positioned(
                 top: 230 * y,
@@ -805,7 +1190,7 @@ class _ScanScreenState extends State<ScanScreen> with TickerProviderStateMixin {
               if (_pulseCtrl != null)
                 AnimatedBuilder(
                   animation: _pulseCtrl!,
-                  builder: (_, _) => Transform.scale(
+                  builder: (_, child) => Transform.scale(
                     scale: 0.88 + 0.14 * _pulseCtrl!.value,
                     child: Opacity(
                       opacity: 0.7 + 0.3 * _pulseCtrl!.value,
@@ -886,20 +1271,14 @@ class _ScanScreenState extends State<ScanScreen> with TickerProviderStateMixin {
     required bool isPrimary,
     required VoidCallback onTap,
   }) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    
     return GestureDetector(
       onTap: _isPredicting ? null : onTap,
       child: Container(
         height: 50,
         decoration: BoxDecoration(
-          color: isPrimary
-              ? AppColors.primary
-              : (isDark ? AppColors.cardBackgroundDark : AppColors.cardBackground),
+          color: isPrimary ? AppColors.primary : AppColors.cardBackground,
           borderRadius: BorderRadius.circular(16),
-          border: isPrimary
-              ? null
-              : Border.all(color: AppColors.divider, width: 1.5),
+          border: isPrimary ? null : Border.all(color: AppColors.divider, width: 1.5),
           boxShadow: isPrimary
               ? [
                   BoxShadow(
@@ -961,22 +1340,22 @@ class _ScanScreenState extends State<ScanScreen> with TickerProviderStateMixin {
                   ),
                 ),
               )
-            : const Row(
+            : Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Icon(Icons.auto_awesome_rounded, color: Colors.white, size: 20),
-                  SizedBox(width: 10),
+                  const Icon(Icons.auto_awesome_rounded, color: Colors.white, size: 20),
+                  const SizedBox(width: 10),
                   Text(
                     'Analisa Sekarang',
-                    style: TextStyle(
+                    style: TextStyleHelper.labelLarge.copyWith(
                       fontSize: 15,
                       fontWeight: FontWeight.w800,
                       color: Colors.white,
                       letterSpacing: 0.3,
                     ),
                   ),
-                  SizedBox(width: 10),
-                  Icon(Icons.arrow_forward_rounded, color: Colors.white70, size: 16),
+                  const SizedBox(width: 10),
+                  const Icon(Icons.arrow_forward_rounded, color: Colors.white70, size: 16),
                 ],
               ),
       ),
@@ -984,14 +1363,12 @@ class _ScanScreenState extends State<ScanScreen> with TickerProviderStateMixin {
   }
 
   Widget _buildResetButton() {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    
     return GestureDetector(
       onTap: _resetAll,
       child: Container(
         height: 54,
         decoration: BoxDecoration(
-          color: isDark ? AppColors.cardBackgroundDark : AppColors.cardBackground,
+          color: AppColors.cardBackground,
           borderRadius: BorderRadius.circular(18),
           border: Border.all(color: AppColors.divider, width: 2),
         ),
@@ -1018,11 +1395,10 @@ class _ScanScreenState extends State<ScanScreen> with TickerProviderStateMixin {
     final healthColor = NutritionData.getHealthColor(healthLevel);
     final healthIcon = NutritionData.getHealthIcon(healthLevel);
     final healthText = NutritionData.getHealthText(healthLevel);
-    final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return Container(
       decoration: BoxDecoration(
-        color: isDark ? AppColors.cardBackgroundDark : AppColors.cardBackground,
+        color: AppColors.cardBackground,
         borderRadius: BorderRadius.circular(24),
         boxShadow: [
           BoxShadow(
@@ -1265,9 +1641,10 @@ class _ScanScreenState extends State<ScanScreen> with TickerProviderStateMixin {
                         label: 'Benar',
                         icon: Icons.thumb_up_rounded,
                         color: AppColors.carbs,
-                        onTap: () => _showSnackBar(
-                          'Terima kasih! Feedback membantu model belajar.',
-                        ),
+                        onTap: () {
+                          _showSnackBar('Terima kasih! Feedback Anda membantu.');
+                          _resetAll();
+                        },
                       ),
                     ),
                     const SizedBox(width: 12),
@@ -1292,7 +1669,6 @@ class _ScanScreenState extends State<ScanScreen> with TickerProviderStateMixin {
 
   Widget _buildCatalogueSection() {
     final catalogue = _getFoodCatalogue();
-    final isDark = Theme.of(context).brightness == Brightness.dark;
     
     if (catalogue.isEmpty) {
       return const SizedBox.shrink();
@@ -1314,14 +1690,14 @@ class _ScanScreenState extends State<ScanScreen> with TickerProviderStateMixin {
             final food = catalogue[i];
             return Container(
               decoration: BoxDecoration(
-                color: isDark ? AppColors.cardBackgroundDark : AppColors.cardBackground,
+                color: AppColors.cardBackground,
                 borderRadius: BorderRadius.circular(14),
                 border: Border.all(color: AppColors.divider, width: 1.2),
               ),
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Text(food['emoji']!, style: const TextStyle(fontSize: 22)),
+                  Text(food['emoji']!, style: TextStyleHelper.displayMedium.copyWith(fontSize: 22)),
                   const SizedBox(height: 4),
                   Text(
                     food['name']!,
@@ -1437,7 +1813,7 @@ class _SectionLabel extends StatelessWidget {
         const SizedBox(width: 7),
         Text(
           label,
-          style: TextStyleHelper.titleSmall.copyWith(
+          style: TextStyleHelper.titleMedium.copyWith(
             color: AppColors.textDark,
           ),
         ),
@@ -1468,7 +1844,7 @@ class _NutrientTile extends StatelessWidget {
           const SizedBox(height: 5),
           Text(
             value,
-            style: TextStyleHelper.labelLarge.copyWith(
+            style: TextStyleHelper.titleMedium.copyWith(
               fontSize: 14,
               color: color,
             ),
@@ -1559,20 +1935,14 @@ class _FeedbackButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    
     return GestureDetector(
       onTap: onTap,
       child: Container(
         height: 50,
         decoration: BoxDecoration(
-          color: filled
-              ? color
-              : (isDark ? AppColors.cardBackgroundDark : AppColors.cardBackground),
+          color: filled ? color : AppColors.cardBackground,
           borderRadius: BorderRadius.circular(16),
-          border: filled
-              ? null
-              : Border.all(color: color.withValues(alpha: 0.5), width: 1.5),
+          border: filled ? null : Border.all(color: color.withValues(alpha: 0.5), width: 1.5),
           boxShadow: filled
               ? [
                   BoxShadow(
@@ -1605,7 +1975,7 @@ class _CorrectionSheet extends StatelessWidget {
   final HybridFoodClassifier classifier;
   final File? selectedImage;
   final Prediction prediction;
-  final void Function(String label) onCorrected;
+  final void Function(String label, BuildContext context) onCorrected; 
 
   const _CorrectionSheet({
     required this.classifier,
@@ -1617,12 +1987,11 @@ class _CorrectionSheet extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final labels = classifier.labels;
-    final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return Container(
       height: MediaQuery.of(context).size.height * 0.65,
       decoration: BoxDecoration(
-        color: isDark ? AppColors.cardBackgroundDark : AppColors.cardBackground,
+        color: AppColors.cardBackground,
         borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
       ),
       child: Column(
@@ -1687,7 +2056,7 @@ class _CorrectionSheet extends StatelessWidget {
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(14),
                   ),
-                  tileColor: isDark ? AppColors.backgroundDark : AppColors.background,
+                  tileColor: AppColors.background,
                   leading: Container(
                     width: 40,
                     height: 40,
@@ -1722,11 +2091,12 @@ class _CorrectionSheet extends StatelessWidget {
                     color: AppColors.textLight,
                     size: 20,
                   ),
-                  onTap: () async {
+                  onTap: () {
                     Navigator.pop(ctx);
-                    final confirmed = await showDialog<bool>(
+                    
+                    showDialog(
                       context: context,
-                      builder: (_) => AlertDialog(
+                      builder: (dialogContext) => AlertDialog(
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(24),
                         ),
@@ -1737,11 +2107,14 @@ class _CorrectionSheet extends StatelessWidget {
                         ),
                         actions: [
                           TextButton(
-                            onPressed: () => Navigator.pop(context, false),
+                            onPressed: () => Navigator.pop(dialogContext),
                             child: const Text('Batal'),
                           ),
                           TextButton(
-                            onPressed: () => Navigator.pop(context, true),
+                            onPressed: () {
+                              Navigator.pop(dialogContext);
+                              onCorrected(label, context);
+                            },
                             child: Text(
                               'Ya, Benar',
                               style: TextStyleHelper.bold(color: AppColors.primary),
@@ -1750,15 +2123,6 @@ class _CorrectionSheet extends StatelessWidget {
                         ],
                       ),
                     );
-                    if (confirmed == true && selectedImage != null) {
-                      final bytes = await selectedImage!.readAsBytes();
-                      await classifier.learnFromFeedback(
-                        imageBytes: bytes,
-                        originalPrediction: prediction.label,
-                        correctLabel: label,
-                      );
-                      onCorrected(label);
-                    }
                   },
                 );
               },

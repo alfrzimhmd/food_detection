@@ -1,4 +1,5 @@
 // lib/screens/history_screen.dart
+import 'dart:async';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -29,6 +30,8 @@ class _HistoryScreenState extends State<HistoryScreen>
   static const _filters = ['Semua', 'Sangat Sehat', 'Cukup Sehat', 'Kurang Sehat'];
 
   AnimationController? _shimmerCtrl;
+  
+  Timer? _debounceTimer;
 
   @override
   void initState() {
@@ -50,6 +53,7 @@ class _HistoryScreenState extends State<HistoryScreen>
   @override
   void dispose() {
     debugPrint('🏠 HistoryScreen: dispose');
+    _debounceTimer?.cancel();
     _shimmerCtrl?.dispose();
     super.dispose();
   }
@@ -103,33 +107,66 @@ class _HistoryScreenState extends State<HistoryScreen>
   }
 
   Future<void> _deleteSingleItem(int id, AppState appState) async {
-    debugPrint('🗑️ Delete item: $id');
-    try {
-      await appState.refresh();
-      _showSnackBar('Riwayat dihapus');
-    } catch (e) {
-      debugPrint('❌ Delete error: $e');
-      _showSnackBar('Gagal menghapus');
-    }
+    // 🔥 Cancel previous delete if any
+    _debounceTimer?.cancel();
+    
+    _debounceTimer = Timer(const Duration(milliseconds: 300), () async {
+      debugPrint('🗑️ Delete item: $id');
+      
+      final itemToDelete = appState.scanHistory.firstWhere(
+        (item) => item['id'] == id,
+        orElse: () => {},
+      );
+      
+      final imagePath = itemToDelete['image_path'] as String?;
+      
+      try {
+        await appState.deleteScanHistory(id);
+        
+        if (imagePath != null && imagePath.isNotEmpty) {
+          try {
+            final imageFile = File(imagePath);
+            if (await imageFile.exists()) {
+              await imageFile.delete();
+              debugPrint('🗑️ Image file deleted: $imagePath');
+            }
+          } catch (e) {
+            debugPrint('⚠️ Failed to delete image file: $e');
+          }
+        }
+        
+        if (mounted) {
+          _showSnackBar('Riwayat berhasil dihapus');
+        }
+      } catch (e) {
+        debugPrint('❌ Delete error: $e');
+        if (mounted) {
+          _showSnackBar('Gagal menghapus riwayat', isError: true);
+        }
+      }
+    });
   }
 
   Future<void> _confirmDeleteAll(AppState appState) async {
     debugPrint('🗑️ Confirm delete all');
     final ok = await _showConfirmDialog(
       title: 'Hapus Semua Riwayat',
-      body: 'Seluruh riwayat scan akan dihapus permanen.',
+      body: 'Seluruh riwayat scan akan dihapus permanen. Data profil akan tetap tersimpan.',
       confirmLabel: 'Hapus Semua',
       confirmColor: AppColors.fat,
     );
     if (ok != true || !mounted) return;
     
     try {
-      await appState.resetAllData();
-      await appState.refresh();
-      _showSnackBar('Semua riwayat telah dihapus');
+      await appState.deleteAllScanHistory();  // 🔥 Gunakan method dari AppState
+      if (mounted) {
+        _showSnackBar('Semua riwayat telah dihapus');
+      }
     } catch (e) {
       debugPrint('❌ Delete all error: $e');
-      _showSnackBar('Gagal menghapus');
+      if (mounted) {
+        _showSnackBar('Gagal menghapus riwayat', isError: true);
+      }
     }
   }
 
@@ -233,15 +270,31 @@ class _HistoryScreenState extends State<HistoryScreen>
     );
   }
 
-  void _showSnackBar(String msg) {
+  void _showSnackBar(String msg, {bool isError = false}) {
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text(msg, style: TextStyleHelper.bodyMedium.copyWith(color: Colors.white)),
-        backgroundColor: AppColors.primary,
+        content: Row(
+          children: [
+            Icon(
+              isError ? Icons.error_outline : Icons.check_circle_outline,
+              color: Colors.white,
+              size: 18,
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                msg,
+                style: TextStyleHelper.bodyMedium.copyWith(color: Colors.white),
+              ),
+            ),
+          ],
+        ),
+        backgroundColor: isError ? AppColors.error : AppColors.primary,
         behavior: SnackBarBehavior.floating,
         margin: const EdgeInsets.fromLTRB(20, 0, 20, 24),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+        duration: const Duration(seconds: 2),
       ),
     );
   }
@@ -358,18 +411,10 @@ class _HistoryScreenState extends State<HistoryScreen>
                   ],
                 ),
               ),
-              _AppBarAction(
-                icon: Icons.refresh_rounded,
-                onTap: () {
-                  debugPrint('🔄 Manual refresh button pressed');
-                  final appState = Provider.of<AppState>(context, listen: false);
-                  appState.refresh();
-                },
-              ),
               if (totalCount > 0) ...[
                 const SizedBox(width: 6),
                 _AppBarAction(
-                  icon: Icons.delete_sweep_rounded,
+                  icon: Icons.delete_rounded,
                   onTap: () {
                     final appState = Provider.of<AppState>(context, listen: false);
                     _confirmDeleteAll(appState);
@@ -609,8 +654,12 @@ class _HistoryScreenState extends State<HistoryScreen>
         confirmLabel: 'Hapus',
         confirmColor: AppColors.fat,
       ).then((v) => v == true),
-      onDismissed: (_) => _deleteSingleItem(id, appState),
-      background: Container(
+      onDismissed: (_) {
+        // 🔥 Jangan langsung hapus di sini, karena bisa crash
+        // Gunakan Future.microtask untuk menghindari crash
+        Future.microtask(() => _deleteSingleItem(id, appState));
+      },
+        background: Container(
         alignment: Alignment.centerRight,
         padding: const EdgeInsets.only(right: 20),
         decoration: BoxDecoration(
