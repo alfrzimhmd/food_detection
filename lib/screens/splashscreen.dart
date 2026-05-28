@@ -1,7 +1,11 @@
+// lib/screens/splashscreen.dart
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import '../data/database_manager.dart';
+import 'package:provider/provider.dart';
+import '../providers/app_state.dart';
+import '../utils/app_colors.dart';
+import '../utils/text_style_helper.dart';
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
@@ -15,17 +19,12 @@ class _SplashScreenState extends State<SplashScreen>
   
   late AnimationController _scaleController;
   late Animation<double> _scaleAnimation;
-  
   late AnimationController _fadeController;
   late Animation<double> _fadeAnimation;
-  
   late AnimationController _rotationController;
   late Animation<double> _rotationAnimation;
-  
   late AnimationController _textController;
   late Animation<double> _textFadeAnimation;
-  
-  final DatabaseManager _dbManager = DatabaseManager();
 
   @override
   void initState() {
@@ -38,10 +37,7 @@ class _SplashScreenState extends State<SplashScreen>
       duration: const Duration(milliseconds: 1200),
     );
     _scaleAnimation = Tween<double>(begin: 0.5, end: 1.0).animate(
-      CurvedAnimation(
-        parent: _scaleController,
-        curve: Curves.elasticOut,
-      ),
+      CurvedAnimation(parent: _scaleController, curve: Curves.elasticOut),
     );
     
     _fadeController = AnimationController(
@@ -49,10 +45,7 @@ class _SplashScreenState extends State<SplashScreen>
       duration: const Duration(milliseconds: 800),
     );
     _fadeAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
-      CurvedAnimation(
-        parent: _fadeController,
-        curve: Curves.easeIn,
-      ),
+      CurvedAnimation(parent: _fadeController, curve: Curves.easeIn),
     );
     
     _rotationController = AnimationController(
@@ -60,10 +53,7 @@ class _SplashScreenState extends State<SplashScreen>
       duration: const Duration(milliseconds: 1500),
     );
     _rotationAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
-      CurvedAnimation(
-        parent: _rotationController,
-        curve: Curves.linear,
-      ),
+      CurvedAnimation(parent: _rotationController, curve: Curves.linear),
     );
     _rotationController.repeat();
     
@@ -72,65 +62,31 @@ class _SplashScreenState extends State<SplashScreen>
       duration: const Duration(milliseconds: 600),
     );
     _textFadeAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
-      CurvedAnimation(
-        parent: _textController,
-        curve: Curves.easeOut,
-      ),
+      CurvedAnimation(parent: _textController, curve: Curves.easeOut),
     );
     
     _scaleController.forward();
     _fadeController.forward();
     _textController.forward();
     
-    // Panggil navigasi setelah delay
     _navigateToNextScreen();
   }
   
   Future<void> _navigateToNextScreen() async {
-    // Tunggu 2.5 detik untuk animasi splash screen
     await Future.delayed(const Duration(milliseconds: 2500));
     
-    debugPrint('🔍 SplashScreen: Memeriksa user profile di database...');
-    
-    try {
-      // Pastikan database siap
-      final isDbReady = await _dbManager.isDatabaseOpen();
-      if (!isDbReady) {
-        debugPrint('⚠️ Database belum siap, inisialisasi ulang...');
-        await _dbManager.init();
-      }
+    if (mounted) {
+      SystemChrome.setEnabledSystemUIMode(
+        SystemUiMode.manual,
+        overlays: [SystemUiOverlay.top, SystemUiOverlay.bottom],
+      );
       
-      // Cek apakah user profile sudah ada di database
-      final userProfile = await _dbManager.getUserProfile();
-      final hasUserProfile = userProfile != null;
+      final appState = Provider.of<AppState>(context, listen: false);
+      final isOnboarded = appState.isOnboarded;
       
-      debugPrint('📊 Hasil pengecekan user profile: $hasUserProfile');
-      if (hasUserProfile) {
-        debugPrint('✅ User profile ditemukan: ${userProfile['name']}');
+      if (isOnboarded) {
+        Navigator.pushReplacementNamed(context, '/main');
       } else {
-        debugPrint('❌ User profile tidak ditemukan, akan menuju onboarding');
-      }
-      
-      if (mounted) {
-        SystemChrome.setEnabledSystemUIMode(SystemUiMode.manual,
-          overlays: [SystemUiOverlay.top, SystemUiOverlay.bottom],
-        );
-        
-        if (hasUserProfile) {
-          // User sudah memiliki profile, langsung ke MainScreen
-          debugPrint('➡️ Navigasi ke /main');
-          Navigator.pushReplacementNamed(context, '/main');
-        } else {
-          // User belum memiliki profile, ke OnboardingScreen
-          debugPrint('➡️ Navigasi ke /onboarding');
-          Navigator.pushReplacementNamed(context, '/onboarding');
-        }
-      }
-    } catch (e) {
-      debugPrint('❌ Error saat mengecek user profile: $e');
-      // Jika error, anggap belum ada profile dan arahkan ke onboarding
-      if (mounted) {
-        debugPrint('➡️ Error terjadi, navigasi ke /onboarding sebagai fallback');
         Navigator.pushReplacementNamed(context, '/onboarding');
       }
     }
@@ -154,22 +110,12 @@ class _SplashScreenState extends State<SplashScreen>
           opacity: _fadeAnimation.value,
           child: Scaffold(
             body: Container(
-              decoration: const BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                  colors: [
-                    Color(0xFF0A3D0A),
-                    Color(0xFF1B5E20),
-                    Color(0xFF2E7D32),
-                    Color(0xFF388E3C),
-                  ],
-                  stops: [0.0, 0.35, 0.65, 1.0],
-                ),
+              decoration: BoxDecoration(
+                gradient: AppColors.splashGradient,
               ),
               child: Stack(
                 children: [
-                  // Dekorasi lingkaran latar belakang (tetap sama seperti kode Anda)
+                  // Dekorasi lingkaran latar belakang
                   Positioned(
                     top: -100,
                     right: -100,
@@ -246,7 +192,7 @@ class _SplashScreenState extends State<SplashScreen>
                                 ),
                                 child: ClipOval(
                                   child: Image.asset(
-                                    'assets/images/logoapk.png',
+                                    'assets/images/logo.png',
                                     width: 120,
                                     height: 120,
                                     fit: BoxFit.cover,
@@ -256,7 +202,7 @@ class _SplashScreenState extends State<SplashScreen>
                                         child: const Icon(
                                           Icons.restaurant,
                                           size: 60,
-                                          color: Color(0xFF2E7D32),
+                                          color: AppColors.primary,
                                         ),
                                       );
                                     },
@@ -277,14 +223,12 @@ class _SplashScreenState extends State<SplashScreen>
                               opacity: _textFadeAnimation.value,
                               child: Column(
                                 children: [
-                                  const Text(
+                                  Text(
                                     'Food Detection',
-                                    style: TextStyle(
-                                      fontSize: 28,
-                                      fontWeight: FontWeight.bold,
+                                    style: TextStyleHelper.displayMedium.copyWith(
                                       color: Colors.white,
                                       letterSpacing: 1.5,
-                                      shadows: [
+                                      shadows: const [
                                         Shadow(
                                           color: Colors.black26,
                                           offset: Offset(0, 2),
@@ -296,8 +240,7 @@ class _SplashScreenState extends State<SplashScreen>
                                   const SizedBox(height: 8),
                                   Text(
                                     'Deteksi Makanan & Nutrisi',
-                                    style: TextStyle(
-                                      fontSize: 14,
+                                    style: TextStyleHelper.bodyMedium.copyWith(
                                       color: Colors.white.withValues(alpha: 0.8),
                                       letterSpacing: 0.5,
                                     ),
@@ -340,10 +283,9 @@ class _SplashScreenState extends State<SplashScreen>
                           builder: (context, child) {
                             return Opacity(
                               opacity: _textFadeAnimation.value * 0.6,
-                              child: const Text(
+                              child: Text(
                                 'Memuat aplikasi...',
-                                style: TextStyle(
-                                  fontSize: 11,
+                                style: TextStyleHelper.caption.copyWith(
                                   color: Colors.white70,
                                 ),
                               ),

@@ -1,22 +1,9 @@
+// lib/screens/profile_screen.dart
 import 'package:flutter/material.dart';
-import '../data/database_manager.dart';
-
-// ─── Design Tokens ────────────────────────────────────────────────────────────
-class _C {
-  static const Color primary      = Color(0xFF1B6B3A);
-  static const Color primaryDark  = Color(0xFF0F3D22);
-  static const Color glow         = Color(0xFFD6F5E3);
-  static const Color bg           = Color(0xFFF2F7F4);
-  static const Color card         = Colors.white;
-  static const Color textDark     = Color(0xFF1A3328);
-  static const Color textMid      = Color(0xFF5A7265);
-  static const Color textLight    = Color(0xFFACC4B4);
-  static const Color divider      = Color(0xFFE4EDE8);
-  static const Color calColor     = Color(0xFFF59E0B);
-  static const Color protColor    = Color(0xFF3B82F6);
-  static const Color carbColor    = Color(0xFF10B981);
-  static const Color fatColor     = Color(0xFFEF4444);
-}
+import 'package:provider/provider.dart';
+import '../providers/app_state.dart';
+import '../utils/app_colors.dart';
+import '../utils/text_style_helper.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -26,13 +13,12 @@ class ProfileScreen extends StatefulWidget {
 }
 
 class _ProfileScreenState extends State<ProfileScreen> {
-  final DatabaseManager _db = DatabaseManager();
-  final _formKey  = GlobalKey<FormState>();
-  final _nameCtr  = TextEditingController();
-  final _calCtr   = TextEditingController();
-  final _protCtr  = TextEditingController();
+  final _formKey = GlobalKey<FormState>();
+  final _nameCtr = TextEditingController();
+  final _calCtr = TextEditingController();
+  final _protCtr = TextEditingController();
   final _carbsCtr = TextEditingController();
-  final _fatCtr   = TextEditingController();
+  final _fatCtr = TextEditingController();
 
   Map<String, dynamic>? _profile;
   bool _isLoading = true;
@@ -58,38 +44,52 @@ class _ProfileScreenState extends State<ProfileScreen> {
   // ─── Data ──────────────────────────────────────────────────────────────────
   Future<void> _loadProfile() async {
     setState(() => _isLoading = true);
-    _profile = await _db.getUserProfile();
+    
+    final appState = Provider.of<AppState>(context, listen: false);
+    _profile = appState.userProfile;
+    
     if (_profile != null) {
-      _nameCtr.text  = _profile!['name']            ?? '';
-      _calCtr.text   = (_profile!['target_calories'] ?? 2000).toString();
-      _protCtr.text  = (_profile!['target_protein']  ?? 50.0).toString();
-      _carbsCtr.text = (_profile!['target_carbs']    ?? 250.0).toString();
-      _fatCtr.text   = (_profile!['target_fat']      ?? 65.0).toString();
+      _nameCtr.text = _profile!['name'] ?? '';
+      _calCtr.text = (_profile!['target_calories'] ?? 2000).toString();
+      _protCtr.text = (_profile!['target_protein'] ?? 50.0).toString();
+      _carbsCtr.text = (_profile!['target_carbs'] ?? 250.0).toString();
+      _fatCtr.text = (_profile!['target_fat'] ?? 65.0).toString();
     }
     setState(() => _isLoading = false);
   }
 
   Future<void> _saveProfile() async {
     if (!_formKey.currentState!.validate()) return;
-    await _db.saveUserProfile(
-      name:           _nameCtr.text.trim(),
+    
+    final appState = Provider.of<AppState>(context, listen: false);
+    await appState.saveUserProfile(
+      name: _nameCtr.text.trim(),
       targetCalories: int.parse(_calCtr.text),
-      targetProtein:  double.parse(_protCtr.text),
-      targetCarbs:    double.parse(_carbsCtr.text),
-      targetFat:      double.parse(_fatCtr.text),
+      targetProtein: double.parse(_protCtr.text),
+      targetCarbs: double.parse(_carbsCtr.text),
+      targetFat: double.parse(_fatCtr.text),
     );
-    setState(() { _isEditing = false; _isLoading = true; });
+    
+    setState(() {
+      _isEditing = false;
+      _isLoading = true;
+    });
     await _loadProfile();
+    
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: const Row(children: [
-          Icon(Icons.check_circle_outline_rounded, color: Colors.white, size: 18),
-          SizedBox(width: 8),
-          Text('Profil berhasil diperbarui!',
-            style: TextStyle(fontWeight: FontWeight.w600)),
-        ]),
-        backgroundColor: _C.primary,
+        content: Row(
+          children: [
+            const Icon(Icons.check_circle_outline_rounded, color: Colors.white, size: 18),
+            const SizedBox(width: 8),
+            Text(
+              'Profil berhasil diperbarui!',
+              style: TextStyleHelper.bold(color: Colors.white),
+            ),
+          ],
+        ),
+        backgroundColor: AppColors.primary,
         behavior: SnackBarBehavior.floating,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
         margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
@@ -102,11 +102,15 @@ class _ProfileScreenState extends State<ProfileScreen> {
   Future<void> _handleLogout() async {
     final confirmed = await _showLogoutDialog();
     if (confirmed != true || !mounted) return;
-    await _db.resetAllDataComplete();
-    // ↑ Adjust to your actual reset method name
-    Navigator.of(context).pushNamedAndRemoveUntil(
-      '/onboarding', (route) => false,
-    );
+    
+    final appState = Provider.of<AppState>(context, listen: false);
+    await appState.resetAllData();
+    
+    if (mounted) {
+      Navigator.of(context).pushNamedAndRemoveUntil(
+        '/onboarding', (route) => false,
+      );
+    }
   }
 
   Future<bool?> _showLogoutDialog() {
@@ -114,16 +118,16 @@ class _ProfileScreenState extends State<ProfileScreen> {
       context: context,
       barrierDismissible: true,
       barrierLabel: 'logout',
-      barrierColor: Colors.black.withOpacity(0.55),
+      barrierColor: Colors.black.withValues(alpha: 0.55),
       transitionDuration: const Duration(milliseconds: 280),
-      transitionBuilder: (_, anim, __, child) {
+      transitionBuilder: (_, anim, _, child) {
         final curved = CurvedAnimation(parent: anim, curve: Curves.easeOutBack);
         return ScaleTransition(
           scale: Tween<double>(begin: 0.85, end: 1.0).animate(curved),
           child: FadeTransition(opacity: anim, child: child),
         );
       },
-      pageBuilder: (ctx, _, __) => const _LogoutDialog(),
+      pageBuilder: (ctx, _, _) => const _LogoutDialog(),
     );
   }
 
@@ -139,19 +143,17 @@ class _ProfileScreenState extends State<ProfileScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: _C.bg,
+      backgroundColor: AppColors.background,
       appBar: AppBar(
-        title: const Text(
+        title: Text(
           'Profil Saya',
-          style: TextStyle(
+          style: TextStyleHelper.titleMedium.copyWith(
             fontWeight: FontWeight.w900,
-            fontSize: 18,
-            letterSpacing: -0.5,
             color: Colors.white,
           ),
         ),
         centerTitle: true,
-        backgroundColor: _C.primaryDark,
+        backgroundColor: AppColors.primaryDark,
         elevation: 0,
         actions: [
           if (!_isLoading && !_isEditing)
@@ -161,7 +163,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 icon: Container(
                   padding: const EdgeInsets.all(7),
                   decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(0.14),
+                    color: Colors.white.withValues(alpha: 0.14),
                     borderRadius: BorderRadius.circular(10),
                   ),
                   child: const Icon(Icons.edit_rounded, color: Colors.white, size: 16),
@@ -172,7 +174,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
         ],
       ),
       body: _isLoading
-          ? const Center(child: CircularProgressIndicator(color: _C.primary))
+          ? const Center(
+              child: CircularProgressIndicator(color: AppColors.primary),
+            )
           : SingleChildScrollView(
               padding: const EdgeInsets.fromLTRB(20, 24, 20, 48),
               child: Form(
@@ -204,12 +208,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
         gradient: const LinearGradient(
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
-          colors: [Color(0xFF23874A), _C.primaryDark],
+          colors: [Color(0xFF23874A), AppColors.primaryDark],
         ),
         borderRadius: BorderRadius.circular(28),
         boxShadow: [
           BoxShadow(
-            color: _C.primaryDark.withOpacity(0.22),
+            color: AppColors.primaryDark.withValues(alpha: 0.22),
             blurRadius: 22,
             offset: const Offset(0, 8),
           ),
@@ -219,19 +223,27 @@ class _ProfileScreenState extends State<ProfileScreen> {
         clipBehavior: Clip.none,
         children: [
           // Decorative circles
-          Positioned(right: -24, top: -24,
-            child: Container(width: 90, height: 90,
+          Positioned(
+            right: -24,
+            top: -24,
+            child: Container(
+              width: 90,
+              height: 90,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                color: Colors.white.withOpacity(0.05),
+                color: Colors.white.withValues(alpha: 0.05),
               ),
             ),
           ),
-          Positioned(left: -12, bottom: -20,
-            child: Container(width: 60, height: 60,
+          Positioned(
+            left: -12,
+            bottom: -20,
+            child: Container(
+              width: 60,
+              height: 60,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                color: Colors.white.withOpacity(0.04),
+                color: Colors.white.withValues(alpha: 0.04),
               ),
             ),
           ),
@@ -243,7 +255,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
                   border: Border.all(
-                    color: Colors.white.withOpacity(0.35),
+                    color: Colors.white.withValues(alpha: 0.35),
                     width: 2,
                   ),
                 ),
@@ -251,7 +263,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   width: 82,
                   height: 82,
                   decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(0.14),
+                    color: Colors.white.withValues(alpha: 0.14),
                     shape: BoxShape.circle,
                   ),
                   child: const Icon(
@@ -265,27 +277,23 @@ class _ProfileScreenState extends State<ProfileScreen> {
               Text(
                 _profile?['name'] ?? 'Pengguna',
                 textAlign: TextAlign.center,
-                style: const TextStyle(
+                style: TextStyleHelper.displaySmall.copyWith(
                   fontSize: 22,
-                  fontWeight: FontWeight.w900,
                   color: Colors.white,
-                  letterSpacing: -0.7,
                 ),
               ),
               const SizedBox(height: 10),
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
                 decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.12),
+                  color: Colors.white.withValues(alpha: 0.12),
                   borderRadius: BorderRadius.circular(20),
-                  border: Border.all(color: Colors.white.withOpacity(0.14)),
+                  border: Border.all(color: Colors.white.withValues(alpha: 0.14)),
                 ),
                 child: Text(
                   'Bergabung sejak ${_joinDate()}',
-                  style: const TextStyle(
-                    fontSize: 11,
+                  style: TextStyleHelper.labelMedium.copyWith(
                     color: Colors.white70,
-                    fontWeight: FontWeight.w500,
                   ),
                 ),
               ),
@@ -301,11 +309,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
     return Container(
       padding: const EdgeInsets.all(22),
       decoration: BoxDecoration(
-        color: _C.card,
+        color: AppColors.cardBackground,
         borderRadius: BorderRadius.circular(24),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.05),
+            color: Colors.black.withValues(alpha: 0.05),
             blurRadius: 18,
             offset: const Offset(0, 4),
           ),
@@ -320,20 +328,44 @@ class _ProfileScreenState extends State<ProfileScreen> {
             ctr: _nameCtr,
             label: 'Nama Lengkap',
             icon: Icons.person_outline_rounded,
-            color: _C.primary,
+            color: AppColors.primary,
             validator: (v) =>
                 (v == null || v.trim().isEmpty) ? 'Nama tidak boleh kosong' : null,
           ),
           const SizedBox(height: 24),
           _cardSection('Target Nutrisi Harian', Icons.track_changes_rounded),
           const SizedBox(height: 14),
-          _numField(ctr: _calCtr,   label: 'Target Kalori',      unit: 'kcal', icon: Icons.local_fire_department_rounded, color: _C.calColor),
+          _numField(
+            ctr: _calCtr,
+            label: 'Target Kalori',
+            unit: 'kcal',
+            icon: Icons.local_fire_department_rounded,
+            color: AppColors.calories,
+          ),
           const SizedBox(height: 12),
-          _numField(ctr: _protCtr,  label: 'Target Protein',     unit: 'g',    icon: Icons.fitness_center_rounded,        color: _C.protColor),
+          _numField(
+            ctr: _protCtr,
+            label: 'Target Protein',
+            unit: 'g',
+            icon: Icons.fitness_center_rounded,
+            color: AppColors.protein,
+          ),
           const SizedBox(height: 12),
-          _numField(ctr: _carbsCtr, label: 'Target Karbohidrat', unit: 'g',    icon: Icons.grain_rounded,                 color: _C.carbColor),
+          _numField(
+            ctr: _carbsCtr,
+            label: 'Target Karbohidrat',
+            unit: 'g',
+            icon: Icons.grain_rounded,
+            color: AppColors.carbs,
+          ),
           const SizedBox(height: 12),
-          _numField(ctr: _fatCtr,   label: 'Target Lemak',       unit: 'g',    icon: Icons.water_drop_rounded,            color: _C.fatColor),
+          _numField(
+            ctr: _fatCtr,
+            label: 'Target Lemak',
+            unit: 'g',
+            icon: Icons.water_drop_rounded,
+            color: AppColors.fat,
+          ),
         ],
       ),
     );
@@ -345,19 +377,17 @@ class _ProfileScreenState extends State<ProfileScreen> {
         Container(
           padding: const EdgeInsets.all(6),
           decoration: BoxDecoration(
-            color: _C.glow,
+            color: AppColors.glow,
             borderRadius: BorderRadius.circular(8),
           ),
-          child: Icon(icon, color: _C.primary, size: 15),
+          child: Icon(icon, color: AppColors.primary, size: 15),
         ),
         const SizedBox(width: 9),
         Text(
           title,
-          style: const TextStyle(
+          style: TextStyleHelper.titleSmall.copyWith(
             fontSize: 14,
-            fontWeight: FontWeight.w800,
-            color: _C.textDark,
-            letterSpacing: -0.2,
+            color: AppColors.textDark,
           ),
         ),
       ],
@@ -373,32 +403,29 @@ class _ProfileScreenState extends State<ProfileScreen> {
     final active = _isEditing;
     return InputDecoration(
       labelText: label,
-      labelStyle: TextStyle(
-        color: active ? color : _C.textLight,
-        fontSize: 13,
-        fontWeight: FontWeight.w600,
+      labelStyle: TextStyleHelper.labelMedium.copyWith(
+        color: active ? color : AppColors.textLight,
       ),
-      prefixIcon: Icon(icon, color: active ? color : _C.textLight, size: 20),
+      prefixIcon: Icon(icon, color: active ? color : AppColors.textLight, size: 20),
       suffixText: suffix,
-      suffixStyle: TextStyle(
+      suffixStyle: TextStyleHelper.labelMedium.copyWith(
         color: color,
         fontWeight: FontWeight.bold,
-        fontSize: 13,
       ),
       filled: true,
-      fillColor: active ? Colors.white : _C.bg,
+      fillColor: active ? Colors.white : AppColors.background,
       contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
       border: OutlineInputBorder(
         borderRadius: BorderRadius.circular(16),
-        borderSide: const BorderSide(color: _C.divider, width: 1.5),
+        borderSide: const BorderSide(color: AppColors.divider, width: 1.5),
       ),
       enabledBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(16),
-        borderSide: const BorderSide(color: _C.divider, width: 1.5),
+        borderSide: const BorderSide(color: AppColors.divider, width: 1.5),
       ),
       disabledBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(16),
-        borderSide: const BorderSide(color: _C.divider, width: 1.5),
+        borderSide: const BorderSide(color: AppColors.divider, width: 1.5),
       ),
       focusedBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(16),
@@ -417,10 +444,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
     return TextFormField(
       controller: ctr,
       enabled: _isEditing,
-      style: const TextStyle(
-        fontSize: 14,
+      style: TextStyleHelper.bodyMedium.copyWith(
         fontWeight: FontWeight.w700,
-        color: _C.textDark,
+        color: AppColors.textDark,
       ),
       decoration: _dec(label: label, icon: icon, color: color),
       validator: validator,
@@ -438,10 +464,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
       controller: ctr,
       enabled: _isEditing,
       keyboardType: const TextInputType.numberWithOptions(decimal: true),
-      style: const TextStyle(
-        fontSize: 14,
+      style: TextStyleHelper.bodyMedium.copyWith(
         fontWeight: FontWeight.w700,
-        color: _C.textDark,
+        color: AppColors.textDark,
       ),
       decoration: _dec(label: label, icon: icon, color: color, suffix: unit),
       validator: (v) {
@@ -463,16 +488,18 @@ class _ProfileScreenState extends State<ProfileScreen> {
               _loadProfile();
             },
             style: OutlinedButton.styleFrom(
-              foregroundColor: _C.textMid,
-              side: const BorderSide(color: _C.divider, width: 1.5),
+              foregroundColor: AppColors.textMedium,
+              side: const BorderSide(color: AppColors.divider, width: 1.5),
               padding: const EdgeInsets.symmetric(vertical: 15),
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(16),
               ),
             ),
-            child: const Text(
+            child: Text(
               'Batal',
-              style: TextStyle(fontWeight: FontWeight.w700, fontSize: 14),
+              style: TextStyleHelper.labelLarge.copyWith(
+                fontWeight: FontWeight.w700,
+              ),
             ),
           ),
         ),
@@ -481,7 +508,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
           child: ElevatedButton(
             onPressed: _saveProfile,
             style: ElevatedButton.styleFrom(
-              backgroundColor: _C.primary,
+              backgroundColor: AppColors.primary,
               foregroundColor: Colors.white,
               elevation: 0,
               padding: const EdgeInsets.symmetric(vertical: 15),
@@ -489,9 +516,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 borderRadius: BorderRadius.circular(16),
               ),
             ),
-            child: const Text(
+            child: Text(
               'Simpan',
-              style: TextStyle(fontWeight: FontWeight.w800, fontSize: 14),
+              style: TextStyleHelper.labelLarge.copyWith(
+                fontWeight: FontWeight.w800,
+                color: Colors.white,
+              ),
             ),
           ),
         ),
@@ -505,10 +535,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
       decoration: BoxDecoration(
         color: const Color(0xFFFFF5F5),
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: _C.fatColor.withOpacity(0.18)),
+        border: Border.all(color: AppColors.fat.withValues(alpha: 0.18)),
         boxShadow: [
           BoxShadow(
-            color: _C.fatColor.withOpacity(0.05),
+            color: AppColors.fat.withValues(alpha: 0.05),
             blurRadius: 12,
             offset: const Offset(0, 4),
           ),
@@ -520,8 +550,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
         child: InkWell(
           onTap: _handleLogout,
           borderRadius: BorderRadius.circular(20),
-          splashColor: _C.fatColor.withOpacity(0.08),
-          highlightColor: _C.fatColor.withOpacity(0.04),
+          splashColor: AppColors.fat.withValues(alpha: 0.08),
+          highlightColor: AppColors.fat.withValues(alpha: 0.04),
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
             child: Row(
@@ -529,12 +559,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 Container(
                   padding: const EdgeInsets.all(10),
                   decoration: BoxDecoration(
-                    color: _C.fatColor.withOpacity(0.10),
+                    color: AppColors.fat.withValues(alpha: 0.10),
                     borderRadius: BorderRadius.circular(13),
                   ),
                   child: const Icon(
                     Icons.logout_rounded,
-                    color: _C.fatColor,
+                    color: AppColors.fat,
                     size: 20,
                   ),
                 ),
@@ -543,22 +573,18 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Text(
+                      Text(
                         'Keluar & Hapus Data',
-                        style: TextStyle(
+                        style: TextStyleHelper.titleSmall.copyWith(
                           fontSize: 14,
-                          fontWeight: FontWeight.w800,
-                          color: _C.fatColor,
-                          letterSpacing: -0.2,
+                          color: AppColors.fat,
                         ),
                       ),
                       const SizedBox(height: 2),
                       Text(
                         'Menghapus semua riwayat dan data profil',
-                        style: TextStyle(
-                          fontSize: 11,
-                          color: _C.fatColor.withOpacity(0.65),
-                          fontWeight: FontWeight.w500,
+                        style: TextStyleHelper.captionSmall.copyWith(
+                          color: AppColors.fat.withValues(alpha: 0.65),
                         ),
                       ),
                     ],
@@ -566,7 +592,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 ),
                 Icon(
                   Icons.chevron_right_rounded,
-                  color: _C.fatColor.withOpacity(0.45),
+                  color: AppColors.fat.withValues(alpha: 0.45),
                   size: 20,
                 ),
               ],
@@ -595,7 +621,7 @@ class _LogoutDialog extends StatelessWidget {
               borderRadius: BorderRadius.circular(28),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withOpacity(0.18),
+                  color: Colors.black.withValues(alpha: 0.18),
                   blurRadius: 40,
                   offset: const Offset(0, 16),
                 ),
@@ -615,7 +641,7 @@ class _LogoutDialog extends StatelessWidget {
                       colors: [Color(0xFFFFECEC), Color(0xFFFFF5F5)],
                     ),
                     borderRadius: BorderRadius.only(
-                      topLeft:  Radius.circular(28),
+                      topLeft: Radius.circular(28),
                       topRight: Radius.circular(28),
                     ),
                   ),
@@ -630,7 +656,7 @@ class _LogoutDialog extends StatelessWidget {
                           shape: BoxShape.circle,
                           boxShadow: [
                             BoxShadow(
-                              color: const Color(0xFFEF4444).withOpacity(0.20),
+                              color: AppColors.fat.withValues(alpha: 0.20),
                               blurRadius: 18,
                               offset: const Offset(0, 6),
                             ),
@@ -638,20 +664,17 @@ class _LogoutDialog extends StatelessWidget {
                         ),
                         child: const Icon(
                           Icons.logout_rounded,
-                          color: Color(0xFFEF4444),
+                          color: AppColors.fat,
                           size: 32,
                         ),
                       ),
                       const SizedBox(height: 20),
-                      const Text(
+                      Text(
                         'Keluar dari Akun?',
                         textAlign: TextAlign.center,
-                        style: TextStyle(
+                        style: TextStyleHelper.headline3.copyWith(
                           fontSize: 20,
-                          fontWeight: FontWeight.w900,
-                          color: Color(0xFF1A3328),
-                          letterSpacing: -0.5,
-                          height: 1.1,
+                          color: AppColors.textDark,
                         ),
                       ),
                     ],
@@ -663,14 +686,12 @@ class _LogoutDialog extends StatelessWidget {
                   padding: const EdgeInsets.fromLTRB(24, 20, 24, 28),
                   child: Column(
                     children: [
-                      const Text(
+                      Text(
                         'Semua data termasuk riwayat scan dan profil akan dihapus secara permanen.',
                         textAlign: TextAlign.center,
-                        style: TextStyle(
-                          fontSize: 13,
-                          color: Color(0xFF5A7265),
+                        style: TextStyleHelper.bodySmall.copyWith(
+                          color: AppColors.textMedium,
                           height: 1.6,
-                          fontWeight: FontWeight.w500,
                         ),
                       ),
                       const SizedBox(height: 8),
@@ -680,27 +701,25 @@ class _LogoutDialog extends StatelessWidget {
                           horizontal: 14, vertical: 8,
                         ),
                         decoration: BoxDecoration(
-                          color: const Color(0xFFEF4444).withOpacity(0.08),
+                          color: AppColors.fat.withValues(alpha: 0.08),
                           borderRadius: BorderRadius.circular(30),
                           border: Border.all(
-                            color: const Color(0xFFEF4444).withOpacity(0.18),
+                            color: AppColors.fat.withValues(alpha: 0.18),
                           ),
                         ),
-                        child: const Row(
+                        child: Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            Icon(
+                            const Icon(
                               Icons.warning_amber_rounded,
                               size: 14,
-                              color: Color(0xFFEF4444),
+                              color: AppColors.fat,
                             ),
-                            SizedBox(width: 6),
+                            const SizedBox(width: 6),
                             Text(
                               'Tindakan ini tidak dapat dibatalkan',
-                              style: TextStyle(
-                                fontSize: 11,
-                                fontWeight: FontWeight.w700,
-                                color: Color(0xFFEF4444),
+                              style: TextStyleHelper.labelSmall.copyWith(
+                                color: AppColors.fat,
                               ),
                             ),
                           ],
@@ -715,9 +734,9 @@ class _LogoutDialog extends StatelessWidget {
                             child: OutlinedButton(
                               onPressed: () => Navigator.pop(context, false),
                               style: OutlinedButton.styleFrom(
-                                foregroundColor: const Color(0xFF5A7265),
+                                foregroundColor: AppColors.textMedium,
                                 side: const BorderSide(
-                                  color: Color(0xFFE4EDE8),
+                                  color: AppColors.divider,
                                   width: 1.5,
                                 ),
                                 padding: const EdgeInsets.symmetric(vertical: 14),
@@ -725,11 +744,10 @@ class _LogoutDialog extends StatelessWidget {
                                   borderRadius: BorderRadius.circular(14),
                                 ),
                               ),
-                              child: const Text(
+                              child: Text(
                                 'Batal',
-                                style: TextStyle(
+                                style: TextStyleHelper.labelLarge.copyWith(
                                   fontWeight: FontWeight.w700,
-                                  fontSize: 14,
                                 ),
                               ),
                             ),
@@ -739,7 +757,7 @@ class _LogoutDialog extends StatelessWidget {
                             child: ElevatedButton(
                               onPressed: () => Navigator.pop(context, true),
                               style: ElevatedButton.styleFrom(
-                                backgroundColor: const Color(0xFFEF4444),
+                                backgroundColor: AppColors.fat,
                                 foregroundColor: Colors.white,
                                 elevation: 0,
                                 padding: const EdgeInsets.symmetric(vertical: 14),
@@ -747,16 +765,16 @@ class _LogoutDialog extends StatelessWidget {
                                   borderRadius: BorderRadius.circular(14),
                                 ),
                               ),
-                              child: const Row(
+                              child: Row(
                                 mainAxisAlignment: MainAxisAlignment.center,
                                 children: [
-                                  Icon(Icons.logout_rounded, size: 16),
-                                  SizedBox(width: 6),
+                                  const Icon(Icons.logout_rounded, size: 16),
+                                  const SizedBox(width: 6),
                                   Text(
                                     'Keluar',
-                                    style: TextStyle(
+                                    style: TextStyleHelper.labelLarge.copyWith(
                                       fontWeight: FontWeight.w800,
-                                      fontSize: 14,
+                                      color: Colors.white,
                                     ),
                                   ),
                                 ],

@@ -1,33 +1,18 @@
+// lib/screens/history_screen.dart
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import '../data/database_manager.dart';
+import 'package:provider/provider.dart';
+import '../providers/app_state.dart';
+import '../utils/app_colors.dart';
+import '../utils/text_style_helper.dart';
 import 'history_detail_screen.dart';
-
-// ─────────────────────────────────────────────
-//  DESIGN TOKENS
-// ─────────────────────────────────────────────
-class _C {
-  static const Color primary     = Color(0xFF1B6B3A);
-  static const Color primaryDark = Color(0xFF0F3D22);
-  static const Color glow        = Color(0xFFB2F2CB);
-  static const Color bg          = Color(0xFFF4F8F5);
-  static const Color card        = Colors.white;
-  static const Color textDark    = Color(0xFF0D2818);
-  static const Color textMid     = Color(0xFF4A6558);
-  static const Color textLight   = Color(0xFFA0B8AA);
-  static const Color divider     = Color(0xFFE4EDE8);
-  static const Color calColor    = Color(0xFFF59E0B);
-  static const Color protColor   = Color(0xFF3B82F6);
-  static const Color carbColor   = Color(0xFF10B981);
-  static const Color fatColor    = Color(0xFFEF4444);
-}
-
-enum _LoadState { loading, success, error }
+import '../data/nutrition_data.dart';
 
 // ─────────────────────────────────────────────
 //  HISTORY SCREEN
 // ─────────────────────────────────────────────
+
 class HistoryScreen extends StatefulWidget {
   const HistoryScreen({super.key});
 
@@ -38,14 +23,6 @@ class HistoryScreen extends StatefulWidget {
 class _HistoryScreenState extends State<HistoryScreen>
     with SingleTickerProviderStateMixin {
   
-  final DatabaseManager _dbManager = DatabaseManager();
-
-  List<Map<String, dynamic>> _allHistory = [];
-  List<Map<String, dynamic>> _filteredHistory = [];
-
-  _LoadState _loadState = _LoadState.loading;
-  String _errorMessage = '';
-
   String _searchQuery = '';
   String _selectedFilter = 'Semua';
 
@@ -57,6 +34,8 @@ class _HistoryScreenState extends State<HistoryScreen>
   void initState() {
     super.initState();
     
+    debugPrint('🏠 HistoryScreen: initState');
+    
     SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(
       statusBarColor: Colors.transparent,
       statusBarIconBrightness: Brightness.light,
@@ -66,135 +45,90 @@ class _HistoryScreenState extends State<HistoryScreen>
       vsync: this,
       duration: const Duration(milliseconds: 1400),
     )..repeat();
-    
-    // Sinkronisasi pembaruan reaktif dengan DatabaseManager
-    DatabaseManager.databaseUpdateNotifier.addListener(_loadHistory);
-    _loadHistory();
   }
 
   @override
   void dispose() {
-    DatabaseManager.databaseUpdateNotifier.removeListener(_loadHistory);
+    debugPrint('🏠 HistoryScreen: dispose');
     _shimmerCtrl?.dispose();
     super.dispose();
   }
 
-  Future<void> _loadHistory() async {
-    if (!mounted) return;
+  String _getHealthLabelFromData(Map<String, dynamic> item) {
+    final healthLevelStr = item['health_level'] as String?;
+    if (healthLevelStr == null) return 'Tidak diketahui';
     
-    debugPrint('🔵 _loadHistory: START');
-    
-    setState(() {
-      _loadState = _LoadState.loading;
-      _errorMessage = '';
-    });
-
-    try {
-      final result = await _dbManager.getAllScanHistory();
-      debugPrint('✅ Loaded ${result.length} items from database');
-      
-      if (!mounted) return;
-
-      setState(() {
-        _allHistory = result;
-        _loadState = _LoadState.success;
-      });
-      _applyFilters();
-      
-      debugPrint('🔵 SetState success: _allHistory.length=${_allHistory.length}');
-      
-    } catch (e, stacktrace) {
-      debugPrint('❌ Error: $e');
-      debugPrint(stacktrace.toString());
-      if (mounted) {
-        setState(() {
-          _loadState = _LoadState.error;
-          _errorMessage = e.toString();
-        });
-      }
+    switch (healthLevelStr.toLowerCase()) {
+      case 'healthy':
+        return NutritionData.getHealthText(HealthLevel.healthy);
+      case 'medium':
+        return NutritionData.getHealthText(HealthLevel.medium);
+      case 'unhealthy':
+        return NutritionData.getHealthText(HealthLevel.unhealthy);
+      default:
+        return healthLevelStr;
     }
   }
 
-  void _applyFilters() {
-    if (!mounted) return;
+  Color _getHealthColorFromData(Map<String, dynamic> item) {
+    final healthLevelStr = item['health_level'] as String?;
+    if (healthLevelStr == null) return AppColors.textLight;
     
-    setState(() {
-      var list = List<Map<String, dynamic>>.from(_allHistory);
-
-      if (_selectedFilter != 'Semua') {
-        list = list.where((item) {
-          final hl = item['health_level'] as String?;
-          if (hl == null) return false;
-          final l = hl.toLowerCase();
-          if (_selectedFilter == 'Sangat Sehat') return l.contains('healthy');
-          if (_selectedFilter == 'Cukup Sehat') return l.contains('medium');
-          if (_selectedFilter == 'Kurang Sehat') return l.contains('unhealthy');
-          return false;
-        }).toList();
-      }
-
-      if (_searchQuery.trim().isNotEmpty) {
-        final q = _searchQuery.toLowerCase().trim();
-        list = list.where((item) {
-          final name = (item['indonesian_name'] as String? ?? '').toLowerCase();
-          return name.contains(q);
-        }).toList();
-      }
-
-      _filteredHistory = list;
-    });
+    switch (healthLevelStr.toLowerCase()) {
+      case 'healthy':
+        return NutritionData.getHealthColor(HealthLevel.healthy);
+      case 'medium':
+        return NutritionData.getHealthColor(HealthLevel.medium);
+      case 'unhealthy':
+        return NutritionData.getHealthColor(HealthLevel.unhealthy);
+      default:
+        return AppColors.textLight;
+    }
   }
 
-  String _healthLabel(String? hl) {
-    if (hl == null) return 'Tidak diketahui';
-    final l = hl.toLowerCase();
-    if (l.contains('healthy')) return 'Sangat Sehat';
-    if (l.contains('medium')) return 'Cukup Sehat';
-    if (l.contains('unhealthy')) return 'Kurang Sehat';
-    return 'Tidak diketahui';
+  IconData _getHealthIconFromData(Map<String, dynamic> item) {
+    final healthLevelStr = item['health_level'] as String?;
+    if (healthLevelStr == null) return Icons.help_outline_rounded;
+    
+    switch (healthLevelStr.toLowerCase()) {
+      case 'healthy':
+        return NutritionData.getHealthIcon(HealthLevel.healthy);
+      case 'medium':
+        return NutritionData.getHealthIcon(HealthLevel.medium);
+      case 'unhealthy':
+        return NutritionData.getHealthIcon(HealthLevel.unhealthy);
+      default:
+        return Icons.help_outline_rounded;
+    }
   }
 
-  Color _healthColor(String? hl) {
-    if (hl == null) return _C.textLight;
-    final l = hl.toLowerCase();
-    if (l.contains('healthy')) return _C.carbColor;
-    if (l.contains('medium')) return _C.calColor;
-    if (l.contains('unhealthy')) return _C.fatColor;
-    return _C.textLight;
-  }
-
-  IconData _healthIcon(String? hl) {
-    if (hl == null) return Icons.help_outline_rounded;
-    final l = hl.toLowerCase();
-    if (l.contains('healthy')) return Icons.sentiment_very_satisfied_rounded;
-    if (l.contains('medium')) return Icons.sentiment_neutral_rounded;
-    if (l.contains('unhealthy')) return Icons.sentiment_dissatisfied_rounded;
-    return Icons.help_outline_rounded;
-  }
-
-  Future<void> _deleteSingleItem(int id) async {
+  Future<void> _deleteSingleItem(int id, AppState appState) async {
+    debugPrint('🗑️ Delete item: $id');
     try {
-      await _dbManager.deleteScanHistory(id);
-      // Pembaruan data asinkron akan otomatis terpicu lewat ChangeNotifier
+      await appState.refresh();
       _showSnackBar('Riwayat dihapus');
     } catch (e) {
+      debugPrint('❌ Delete error: $e');
       _showSnackBar('Gagal menghapus');
     }
   }
 
-  Future<void> _confirmDeleteAll() async {
+  Future<void> _confirmDeleteAll(AppState appState) async {
+    debugPrint('🗑️ Confirm delete all');
     final ok = await _showConfirmDialog(
       title: 'Hapus Semua Riwayat',
       body: 'Seluruh riwayat scan akan dihapus permanen.',
       confirmLabel: 'Hapus Semua',
-      confirmColor: _C.fatColor,
+      confirmColor: AppColors.fat,
     );
     if (ok != true || !mounted) return;
     
     try {
-      await _dbManager.deleteAllScanHistory();
+      await appState.resetAllData();
+      await appState.refresh();
       _showSnackBar('Semua riwayat telah dihapus');
     } catch (e) {
+      debugPrint('❌ Delete all error: $e');
       _showSnackBar('Gagal menghapus');
     }
   }
@@ -211,56 +145,89 @@ class _HistoryScreenState extends State<HistoryScreen>
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
         child: Padding(
           padding: const EdgeInsets.all(24),
-          child: Column(mainAxisSize: MainAxisSize.min, children: [
-            Container(
-              width: 52, height: 52,
-              decoration: BoxDecoration(
-                color: confirmColor.withOpacity(0.1),
-                borderRadius: BorderRadius.circular(16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 52,
+                height: 52,
+                decoration: BoxDecoration(
+                  color: confirmColor.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                child: Icon(Icons.delete_rounded, color: confirmColor, size: 26),
               ),
-              child: Icon(Icons.delete_rounded, color: confirmColor, size: 26),
-            ),
-            const SizedBox(height: 16),
-            Text(title, style: const TextStyle(
-                fontSize: 17, fontWeight: FontWeight.w800, color: _C.textDark)),
-            const SizedBox(height: 8),
-            Text(body, textAlign: TextAlign.center,
-                style: const TextStyle(fontSize: 13, color: _C.textMid, height: 1.5)),
-            const SizedBox(height: 20),
-            Row(children: [
-              Expanded(child: GestureDetector(
-                onTap: () => Navigator.pop(context, false),
-                child: Container(
-                  height: 48,
-                  decoration: BoxDecoration(
-                    color: _C.bg, borderRadius: BorderRadius.circular(14),
-                    border: Border.all(color: _C.divider, width: 1.5),
-                  ),
-                  child: const Center(
-                    child: Text('Batal', style: TextStyle(
-                        fontWeight: FontWeight.w700, fontSize: 14,
-                        color: _C.textMid)),
-                  ),
+              const SizedBox(height: 16),
+              Text(
+                title,
+                style: TextStyleHelper.headline4.copyWith(
+                  color: AppColors.textDark,
                 ),
-              )),
-              const SizedBox(width: 12),
-              Expanded(child: GestureDetector(
-                onTap: () => Navigator.pop(context, true),
-                child: Container(
-                  height: 48,
-                  decoration: BoxDecoration(
-                    color: confirmColor, borderRadius: BorderRadius.circular(14),
-                    boxShadow: [BoxShadow(
-                        color: confirmColor.withOpacity(0.3),
-                        blurRadius: 10, offset: const Offset(0, 4))],
-                  ),
-                  child: Center(child: Text(confirmLabel,
-                      style: const TextStyle(color: Colors.white,
-                          fontWeight: FontWeight.w700, fontSize: 14))),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                body,
+                textAlign: TextAlign.center,
+                style: TextStyleHelper.bodySmall.copyWith(
+                  color: AppColors.textMedium,
                 ),
-              )),
-            ]),
-          ]),
+              ),
+              const SizedBox(height: 20),
+              Row(
+                children: [
+                  Expanded(
+                    child: GestureDetector(
+                      onTap: () => Navigator.pop(context, false),
+                      child: Container(
+                        height: 48,
+                        decoration: BoxDecoration(
+                          color: AppColors.background,
+                          borderRadius: BorderRadius.circular(14),
+                          border: Border.all(color: AppColors.divider, width: 1.5),
+                        ),
+                        child: Center(
+                          child: Text(
+                            'Batal',
+                            style: TextStyleHelper.labelLarge.copyWith(
+                              color: AppColors.textMedium,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: GestureDetector(
+                      onTap: () => Navigator.pop(context, true),
+                      child: Container(
+                        height: 48,
+                        decoration: BoxDecoration(
+                          color: confirmColor,
+                          borderRadius: BorderRadius.circular(14),
+                          boxShadow: [
+                            BoxShadow(
+                              color: confirmColor.withValues(alpha: 0.3),
+                              blurRadius: 10,
+                              offset: const Offset(0, 4),
+                            ),
+                          ],
+                        ),
+                        child: Center(
+                          child: Text(
+                            confirmLabel,
+                            style: TextStyleHelper.labelLarge.copyWith(
+                              color: Colors.white,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -268,69 +235,150 @@ class _HistoryScreenState extends State<HistoryScreen>
 
   void _showSnackBar(String msg) {
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-      content: Text(msg),
-      backgroundColor: _C.primary,
-      behavior: SnackBarBehavior.floating,
-      margin: const EdgeInsets.fromLTRB(20, 0, 20, 24),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-    ));
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    debugPrint('🔵 BUILD: _loadState=$_loadState, items=${_filteredHistory.length}');
-    
-    return Scaffold(
-      backgroundColor: _C.bg,
-      body: Column(
-        children: [
-          _buildAppBar(),
-          if (_loadState == _LoadState.success && _allHistory.isNotEmpty) ...[
-            _buildSearchBar(),
-            _buildFilterChips(),
-          ],
-          Expanded(child: _buildBody()),
-        ],
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(msg, style: TextStyleHelper.bodyMedium.copyWith(color: Colors.white)),
+        backgroundColor: AppColors.primary,
+        behavior: SnackBarBehavior.floating,
+        margin: const EdgeInsets.fromLTRB(20, 0, 20, 24),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
       ),
     );
   }
 
-  Widget _buildAppBar() {
+  List<Map<String, dynamic>> _applyFilters(
+    List<Map<String, dynamic>> allHistory,
+    String searchQuery,
+    String selectedFilter,
+  ) {
+    var list = List<Map<String, dynamic>>.from(allHistory);
+
+    if (selectedFilter != 'Semua') {
+      list = list.where((item) {
+        final hl = item['health_level'] as String?;
+        if (hl == null) return false;
+        final l = hl.toLowerCase();
+          if (selectedFilter == 'Sangat Sehat') {
+            return l == 'healthy';  // exact match, bukan contains
+          }
+          if (selectedFilter == 'Cukup Sehat') {
+            return l == 'medium';   // exact match, bukan contains
+          }
+          if (selectedFilter == 'Kurang Sehat') {
+            return l == 'unhealthy'; // exact match, bukan contains
+          }
+        return false;
+      }).toList();
+    }
+
+    if (searchQuery.trim().isNotEmpty) {
+      final q = searchQuery.toLowerCase().trim();
+      list = list.where((item) {
+        final name = (item['indonesian_name'] as String? ?? '').toLowerCase();
+        return name.contains(q);
+      }).toList();
+    }
+
+    return list;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    debugPrint('🏠 HistoryScreen: build called');
+    
+    return Scaffold(
+      backgroundColor: AppColors.background,
+      body: Consumer<AppState>(
+        builder: (context, appState, child) {
+          final allHistory = appState.scanHistory;
+          final filteredHistory = _applyFilters(allHistory, _searchQuery, _selectedFilter);
+          final isLoading = appState.isLoading && allHistory.isEmpty;
+          
+          debugPrint('📊 Consumer build: allHistory.length=${allHistory.length}, filteredHistory.length=${filteredHistory.length}, isLoading=$isLoading');
+          
+          return Column(
+            children: [
+              _buildAppBar(allHistory.length, isLoading),
+              if (!isLoading && allHistory.isNotEmpty) ...[
+                _buildSearchBar(),
+                _buildFilterChips(),
+              ],
+              Expanded(
+                child: _buildBody(
+                  isLoading: isLoading,
+                  allHistory: allHistory,
+                  filteredHistory: filteredHistory,
+                  appState: appState,
+                ),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _buildAppBar(int totalCount, bool isLoading) {
     return Container(
-      color: _C.primaryDark,
+      color: AppColors.primaryDark,
       child: SafeArea(
         bottom: false,
         child: Padding(
           padding: const EdgeInsets.fromLTRB(20, 12, 12, 14),
-          child: Row(children: [
-            Container(
-              width: 34, height: 34,
-              decoration: BoxDecoration(
-                color: Colors.white.withOpacity(0.15),
-                borderRadius: BorderRadius.circular(10),
+          child: Row(
+            children: [
+              Container(
+                width: 34,
+                height: 34,
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.15),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: const Icon(Icons.history_rounded, color: Colors.white, size: 18),
               ),
-              child: const Icon(Icons.history_rounded, color: Colors.white, size: 18),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                const Text('Riwayat Scan',
-                    style: TextStyle(color: Colors.white, fontSize: 17,
-                        fontWeight: FontWeight.w800, letterSpacing: -0.3)),
-                if (_loadState == _LoadState.success)
-                  Text('${_allHistory.length} total scan',
-                      style: const TextStyle(color: Colors.white60, fontSize: 12)),
-              ]),
-            ),
-            _AppBarAction(icon: Icons.refresh_rounded, onTap: _loadHistory),
-            if (_allHistory.isNotEmpty) ...[
-              const SizedBox(width: 6),
-              _AppBarAction(icon: Icons.delete_sweep_rounded,
-                  onTap: _confirmDeleteAll,
-                  color: _C.fatColor.withOpacity(0.9)),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'Riwayat Scan',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 17,
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: -0.3,
+                      ),
+                    ),
+                    if (!isLoading)
+                      Text(
+                        '$totalCount total scan',
+                        style: const TextStyle(color: Colors.white60, fontSize: 12),
+                      ),
+                  ],
+                ),
+              ),
+              _AppBarAction(
+                icon: Icons.refresh_rounded,
+                onTap: () {
+                  debugPrint('🔄 Manual refresh button pressed');
+                  final appState = Provider.of<AppState>(context, listen: false);
+                  appState.refresh();
+                },
+              ),
+              if (totalCount > 0) ...[
+                const SizedBox(width: 6),
+                _AppBarAction(
+                  icon: Icons.delete_sweep_rounded,
+                  onTap: () {
+                    final appState = Provider.of<AppState>(context, listen: false);
+                    _confirmDeleteAll(appState);
+                  },
+                  color: AppColors.fat.withValues(alpha: 0.9),
+                ),
+              ],
             ],
-          ]),
+          ),
         ),
       ),
     );
@@ -338,19 +386,21 @@ class _HistoryScreenState extends State<HistoryScreen>
 
   Widget _buildSearchBar() {
     return Container(
-      color: _C.primaryDark,
+      color: AppColors.primaryDark,
       padding: const EdgeInsets.fromLTRB(16, 0, 16, 14),
       child: Container(
         height: 46,
         decoration: BoxDecoration(
-          color: Colors.white.withOpacity(0.12),
+          color: Colors.white.withValues(alpha: 0.12),
           borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: Colors.white.withOpacity(0.15)),
+          border: Border.all(color: Colors.white.withValues(alpha: 0.15)),
         ),
         child: TextField(
           onChanged: (v) {
-            _searchQuery = v;
-            _applyFilters();
+            debugPrint('🔍 Search query changed: $v');
+            setState(() {
+              _searchQuery = v;
+            });
           },
           style: const TextStyle(color: Colors.white, fontSize: 14),
           decoration: const InputDecoration(
@@ -367,11 +417,11 @@ class _HistoryScreenState extends State<HistoryScreen>
 
   Widget _buildFilterChips() {
     return Container(
-      color: _C.primaryDark,
+      color: AppColors.primaryDark,
       child: Container(
-        decoration: const BoxDecoration(
-          color: _C.bg,
-          borderRadius: BorderRadius.vertical(top: Radius.circular(22)),
+        decoration: BoxDecoration(
+          color: AppColors.background,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(22)),
         ),
         padding: const EdgeInsets.fromLTRB(16, 14, 16, 10),
         child: SizedBox(
@@ -379,28 +429,33 @@ class _HistoryScreenState extends State<HistoryScreen>
           child: ListView.separated(
             scrollDirection: Axis.horizontal,
             itemCount: _filters.length,
-            separatorBuilder: (_, __) => const SizedBox(width: 8),
+            separatorBuilder: (_, _) => const SizedBox(width: 8),
             itemBuilder: (_, i) {
               final f = _filters[i];
               final sel = _selectedFilter == f;
               return GestureDetector(
                 onTap: () {
+                  debugPrint('🔍 Filter changed: $f');
                   setState(() => _selectedFilter = f);
-                  _applyFilters();
                 },
                 child: AnimatedContainer(
                   duration: const Duration(milliseconds: 200),
                   padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                   decoration: BoxDecoration(
-                    color: sel ? _C.primary : _C.card,
+                    color: sel ? AppColors.primary : AppColors.cardBackground,
                     borderRadius: BorderRadius.circular(20),
                     border: Border.all(
-                        color: sel ? _C.primary : _C.divider, width: 1.5),
+                      color: sel ? AppColors.primary : AppColors.divider,
+                      width: 1.5,
+                    ),
                   ),
-                  child: Text(f, style: TextStyle(
-                      fontSize: 12,
+                  child: Text(
+                    f,
+                    style: TextStyleHelper.labelMedium.copyWith(
                       fontWeight: sel ? FontWeight.w700 : FontWeight.w500,
-                      color: sel ? Colors.white : _C.textMid)),
+                      color: sel ? Colors.white : AppColors.textMedium,
+                    ),
+                  ),
                 ),
               );
             },
@@ -410,127 +465,116 @@ class _HistoryScreenState extends State<HistoryScreen>
     );
   }
 
-  Widget _buildBody() {
-    if (_loadState == _LoadState.loading) {
+  Widget _buildBody({
+    required bool isLoading,
+    required List<Map<String, dynamic>> allHistory,
+    required List<Map<String, dynamic>> filteredHistory,
+    required AppState appState,
+  }) {
+    if (isLoading) {
+      debugPrint('⏳ Showing shimmer loading');
       return _buildShimmerList();
     }
     
-    if (_loadState == _LoadState.error) {
-      return _buildErrorState();
-    }
-    
-    if (_filteredHistory.isEmpty) {
+    if (allHistory.isEmpty) {
+      debugPrint('📭 Empty history state');
       return _buildEmptyState();
     }
     
+    if (filteredHistory.isEmpty) {
+      debugPrint('🔍 No results for filter/search');
+      return _buildEmptyState(isFiltered: true);
+    }
+    
+    debugPrint('📋 Showing ${filteredHistory.length} items');
+    
     return RefreshIndicator(
-      onRefresh: _loadHistory,
-      color: _C.primary,
+      onRefresh: () {
+        debugPrint('🔄 Pull to refresh');
+        return appState.refresh();
+      },
+      color: AppColors.primary,
       child: ListView.separated(
         padding: const EdgeInsets.fromLTRB(16, 8, 16, 100),
         physics: const AlwaysScrollableScrollPhysics(),
-        itemCount: _filteredHistory.length,
-        separatorBuilder: (_, __) => const SizedBox(height: 10),
+        itemCount: filteredHistory.length,
+        separatorBuilder: (_, _) => const SizedBox(height: 10),
         itemBuilder: (context, index) {
-          return _buildHistoryCard(_filteredHistory[index]);
+          return _buildHistoryCard(filteredHistory[index], appState);
         },
       ),
     );
   }
 
-  Widget _buildEmptyState() {
-    final isFiltered = _searchQuery.isNotEmpty || _selectedFilter != 'Semua';
+  Widget _buildEmptyState({bool isFiltered = false}) {
     return Center(
-      child: Column(mainAxisSize: MainAxisSize.min, children: [
-        Container(
-          width: 80, height: 80,
-          decoration: BoxDecoration(
-              color: _C.glow, borderRadius: BorderRadius.circular(24)),
-          child: Icon(
-            isFiltered ? Icons.search_off_rounded : Icons.camera_alt_outlined,
-            color: _C.primary, size: 36,
-          ),
-        ),
-        const SizedBox(height: 16),
-        Text(
-          isFiltered ? 'Tidak ditemukan' : 'Belum ada riwayat scan',
-          style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700,
-              color: _C.textDark),
-        ),
-        const SizedBox(height: 6),
-        Text(
-          isFiltered
-              ? 'Coba ubah filter atau kata kunci'
-              : 'Mulai scan makanan untuk melihat riwayat',
-          style: const TextStyle(fontSize: 13, color: _C.textLight),
-        ),
-        if (isFiltered) ...[
-          const SizedBox(height: 16),
-          GestureDetector(
-            onTap: () {
-              setState(() { _searchQuery = ''; _selectedFilter = 'Semua'; });
-              _applyFilters();
-            },
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-              decoration: BoxDecoration(
-                  color: _C.glow, borderRadius: BorderRadius.circular(20)),
-              child: const Text('Hapus Filter',
-                  style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700,
-                      color: _C.primary)),
-            ),
-          ),
-        ],
-      ]),
-    );
-  }
-
-  Widget _buildErrorState() {
-    return Center(
-      child: Column(mainAxisSize: MainAxisSize.min, children: [
-        Container(
-          width: 80, height: 80,
-          decoration: BoxDecoration(
-            color: _C.fatColor.withOpacity(0.1),
-            borderRadius: BorderRadius.circular(24),
-          ),
-          child: Icon(Icons.error_outline_rounded, color: _C.fatColor, size: 36),
-        ),
-        const SizedBox(height: 16),
-        const Text('Gagal memuat data',
-            style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700,
-                color: _C.textDark)),
-        const SizedBox(height: 6),
-        Text(
-          _errorMessage,
-          textAlign: TextAlign.center,
-          style: const TextStyle(fontSize: 13, color: _C.textLight),
-        ),
-        const SizedBox(height: 20),
-        GestureDetector(
-          onTap: _loadHistory,
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 80,
+            height: 80,
             decoration: BoxDecoration(
-              color: _C.primary,
-              borderRadius: BorderRadius.circular(16),
+              color: AppColors.glow,
+              borderRadius: BorderRadius.circular(24),
             ),
-            child: const Row(mainAxisSize: MainAxisSize.min, children: [
-              Icon(Icons.refresh_rounded, color: Colors.white, size: 18),
-              SizedBox(width: 8),
-              Text('Coba Lagi', style: TextStyle(color: Colors.white,
-                  fontWeight: FontWeight.w700, fontSize: 14)),
-            ]),
+            child: Icon(
+              isFiltered ? Icons.search_off_rounded : Icons.camera_alt_outlined,
+              color: AppColors.primary,
+              size: 36,
+            ),
           ),
-        ),
-      ]),
+          const SizedBox(height: 16),
+          Text(
+            isFiltered ? 'Tidak ditemukan' : 'Belum ada riwayat scan',
+            style: TextStyleHelper.titleMedium.copyWith(
+              color: AppColors.textDark,
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            isFiltered
+                ? 'Coba ubah filter atau kata kunci'
+                : 'Mulai scan makanan untuk melihat riwayat',
+            style: TextStyleHelper.bodySmall.copyWith(
+              color: AppColors.textLight,
+            ),
+          ),
+          if (isFiltered) ...[
+            const SizedBox(height: 16),
+            GestureDetector(
+              onTap: () {
+                debugPrint('🔍 Clear filters');
+                setState(() {
+                  _searchQuery = '';
+                  _selectedFilter = 'Semua';
+                });
+              },
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+                decoration: BoxDecoration(
+                  color: AppColors.glow,
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Text(
+                  'Hapus Filter',
+                  style: TextStyleHelper.labelMedium.copyWith(
+                    color: AppColors.primary,
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ],
+      ),
     );
   }
 
-  Widget _buildHistoryCard(Map<String, dynamic> item) {
+  Widget _buildHistoryCard(Map<String, dynamic> item, AppState appState) {
     final id = item['id'] as int? ?? 0;
     final scannedAt = DateTime.fromMillisecondsSinceEpoch(
-        (item['scanned_at'] as int?) ?? DateTime.now().millisecondsSinceEpoch);
+      (item['scanned_at'] as int?) ?? DateTime.now().millisecondsSinceEpoch,
+    );
     final timeStr = '${scannedAt.hour.toString().padLeft(2, '0')}:${scannedAt.minute.toString().padLeft(2, '0')}';
     final dateStr = '${scannedAt.day} ${_monthName(scannedAt.month)} ${scannedAt.year}';
     
@@ -541,16 +585,19 @@ class _HistoryScreenState extends State<HistoryScreen>
     final carbs = (item['carbs'] as num?)?.toDouble() ?? 0.0;
     final fat = (item['fat'] as num?)?.toDouble() ?? 0.0;
     
-    final hl = item['health_level'] as String?;
-    final hColor = _healthColor(hl);
-    final hLabel = _healthLabel(hl);
-    final hIcon = _healthIcon(hl);
+    final hColor = _getHealthColorFromData(item);
+    final hLabel = _getHealthLabelFromData(item);
+    final hIcon = _getHealthIconFromData(item);
 
     bool hasValidImage = false;
+    File? imageFile;
     if (imagePath != null && imagePath.isNotEmpty) {
       try {
-        hasValidImage = File(imagePath).existsSync();
-      } catch (e) {}
+        imageFile = File(imagePath);
+        hasValidImage = imageFile.existsSync();
+      } catch (e) {
+        hasValidImage = false;
+      }
     }
 
     return Dismissible(
@@ -560,116 +607,213 @@ class _HistoryScreenState extends State<HistoryScreen>
         title: 'Hapus Riwayat',
         body: '"$name" akan dihapus permanen.',
         confirmLabel: 'Hapus',
-        confirmColor: _C.fatColor,
+        confirmColor: AppColors.fat,
       ).then((v) => v == true),
-      onDismissed: (_) => _deleteSingleItem(id),
+      onDismissed: (_) => _deleteSingleItem(id, appState),
       background: Container(
         alignment: Alignment.centerRight,
         padding: const EdgeInsets.only(right: 20),
         decoration: BoxDecoration(
-          color: _C.fatColor.withOpacity(0.12),
+          color: AppColors.fat.withValues(alpha: 0.12),
           borderRadius: BorderRadius.circular(20),
         ),
-        child: Column(mainAxisSize: MainAxisSize.min, children: [
-          Icon(Icons.delete_rounded, color: _C.fatColor, size: 24),
-          const SizedBox(height: 4),
-          Text('Hapus', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: _C.fatColor)),
-        ]),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.delete_rounded, color: AppColors.fat, size: 24),
+            const SizedBox(height: 4),
+            Text(
+              'Hapus',
+              style: TextStyleHelper.labelSmall.copyWith(
+                color: AppColors.fat,
+              ),
+            ),
+          ],
+        ),
       ),
       child: GestureDetector(
-        onTap: () {
-          Navigator.push(
+        onTap: () async {
+          debugPrint('📱 Tap history item: $name (id=$id)');
+          await Navigator.push(
             context,
             MaterialPageRoute(
               builder: (_) => HistoryDetailScreen(historyItem: Map.from(item)),
             ),
           );
+          debugPrint('🔄 Returning from detail, refreshing data...');
+          await appState.refresh();
         },
         child: Container(
-          height: 124, // Memaksakan batas tinggi agar Row dan ClipRRect aman (Mencegah Layout Loop Freeze)
+          height: 100,
           decoration: BoxDecoration(
-            color: _C.card,
+            color: AppColors.cardBackground,
             borderRadius: BorderRadius.circular(20),
-            boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 12, offset: const Offset(0, 4))],
-          ),
-          child: Row(children: [
-            ClipRRect(
-              borderRadius: const BorderRadius.horizontal(left: Radius.circular(20)),
-              child: SizedBox(
-                width: 96,
-                height: 124, // Penyelaras tinggi mutlak
-                child: hasValidImage
-                    ? Image.file(
-                        File(imagePath!), 
-                        fit: BoxFit.cover, 
-                        cacheWidth: 200, // Mengoptimalkan memori native (UI thread tidak membeku)
-                        errorBuilder: (_, __, ___) => _photoFallback(name),
-                      )
-                    : _photoFallback(name),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.04),
+                blurRadius: 12,
+                offset: const Offset(0, 4),
               ),
-            ),
-            Expanded(
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(14, 12, 10, 12),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween, // Pembagian ruang asri vertikal
-                  children: [
-                    Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                      Expanded(
-                        child: Text(name, maxLines: 1, overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: _C.textDark)),
-                      ),
-                      Icon(Icons.chevron_right_rounded, color: _C.textLight.withOpacity(0.7), size: 20),
-                    ]),
-                    Row(children: [
-                      const Icon(Icons.access_time_rounded, size: 12, color: _C.textLight),
-                      const SizedBox(width: 4),
-                      Text('$timeStr  ·  $dateStr', style: const TextStyle(fontSize: 11, color: _C.textLight)),
-                    ]),
-                    Row(children: [
-                      _badge(icon: Icons.local_fire_department_rounded, label: '$cal kcal', color: _C.calColor),
-                      const SizedBox(width: 6),
-                      _badge(icon: hIcon, label: hLabel, color: hColor),
-                    ]),
-                    Row(children: [
-                      _MacroPill('P', '${protein.toStringAsFixed(1)} g', _C.protColor),
-                      const SizedBox(width: 5),
-                      _MacroPill('K', '${carbs.toStringAsFixed(1)} g', _C.carbColor),
-                      const SizedBox(width: 5),
-                      _MacroPill('L', '${fat.toStringAsFixed(1)} g', _C.fatColor),
-                    ]),
-                  ],
+            ],
+          ),
+          child: Row(
+            children: [
+              ClipRRect(
+                borderRadius: const BorderRadius.horizontal(
+                  left: Radius.circular(20),
+                ),
+                child: SizedBox(
+                  width: 80,
+                  height: 100,
+                  child: hasValidImage && imageFile != null
+                      ? Image.file(
+                          imageFile,
+                          fit: BoxFit.cover,
+                          width: 80,
+                          height: 100,
+                          cacheWidth: 150,
+                          errorBuilder: (context, error, stackTrace) {
+                            return _photoFallback(name);
+                          },
+                        )
+                      : _photoFallback(name),
                 ),
               ),
-            ),
-          ]),
+              
+              const SizedBox(width: 12),
+
+              Expanded(
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 4),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        name,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyleHelper.titleMedium.copyWith(
+                          fontSize: 14,
+                          color: AppColors.textDark,
+                        ),
+                      ),
+                      
+                      Row(
+                        children: [
+                          Icon(
+                            Icons.access_time_rounded,
+                            size: 11,
+                            color: AppColors.textLight,
+                          ),
+                          const SizedBox(width: 4),
+                          Text(
+                            '$timeStr  •  $dateStr',
+                            style: TextStyleHelper.captionSmall.copyWith(
+                              color: AppColors.textLight,
+                            ),
+                          ),
+                        ],
+                      ),
+                      
+                      Row(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                            decoration: BoxDecoration(
+                              color: hColor.withValues(alpha: 0.12),
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(hIcon, size: 11, color: hColor),
+                                const SizedBox(width: 4),
+                                Text(
+                                  hLabel,
+                                  style: TextStyleHelper.labelSmall.copyWith(
+                                    fontSize: 10,
+                                    color: hColor,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                            decoration: BoxDecoration(
+                              color: AppColors.calories.withValues(alpha: 0.12),
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                const Icon(
+                                  Icons.local_fire_department_rounded,
+                                  size: 11,
+                                  color: AppColors.calories,
+                                ),
+                                const SizedBox(width: 3),
+                                Text(
+                                  '$cal kkal',
+                                  style: TextStyleHelper.labelSmall.copyWith(
+                                    fontSize: 10,
+                                    color: AppColors.calories,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                      
+                      Row(
+                        children: [
+                          _MacroPill('P', '${protein.toStringAsFixed(1)}g', AppColors.protein),
+                          const SizedBox(width: 5),
+                          _MacroPill('K', '${carbs.toStringAsFixed(1)}g', AppColors.carbs),
+                          const SizedBox(width: 5),
+                          _MacroPill('L', '${fat.toStringAsFixed(1)}g', AppColors.fat),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+
+              Padding(
+                padding: const EdgeInsets.only(right: 12),
+                child: Icon(
+                  Icons.chevron_right_rounded,
+                  color: AppColors.textLight.withValues(alpha: 0.7),
+                  size: 20,
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
   }
 
-  Widget _badge({required IconData icon, required String label, required Color color}) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-      decoration: BoxDecoration(color: color.withOpacity(0.1), borderRadius: BorderRadius.circular(8)),
-      child: Row(mainAxisSize: MainAxisSize.min, children: [
-        Icon(icon, size: 12, color: color),
-        const SizedBox(width: 3),
-        Text(label, style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: color)),
-      ]),
-    );
-  }
-
   Widget _photoFallback(String name) {
     return Container(
-      color: _C.glow,
-      child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-        const Icon(Icons.restaurant_rounded, color: _C.primary, size: 28),
-        const SizedBox(height: 4),
-        Text(name.isNotEmpty ? name[0].toUpperCase() : '?',
-            style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: _C.primary)),
-      ]),
+      color: AppColors.glow,
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          const Icon(Icons.restaurant_rounded, color: AppColors.primary, size: 28),
+          const SizedBox(height: 4),
+          Text(
+            name.isNotEmpty ? name[0].toUpperCase() : '?',
+            style: TextStyleHelper.displayMedium.copyWith(
+              fontSize: 18,
+              color: AppColors.primary,
+            ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -678,19 +822,26 @@ class _HistoryScreenState extends State<HistoryScreen>
       padding: const EdgeInsets.fromLTRB(16, 8, 16, 40),
       itemCount: 6,
       physics: const NeverScrollableScrollPhysics(),
-      separatorBuilder: (_, __) => const SizedBox(height: 10),
-      itemBuilder: (_, __) => _shimmerCard(),
+      separatorBuilder: (_, _) => const SizedBox(height: 10),
+      itemBuilder: (_, _) => _shimmerCard(),
     );
   }
 
   Widget _shimmerCard() {
     final ctrl = _shimmerCtrl;
+    
     if (ctrl == null || !ctrl.isAnimating) {
-      return Container(height: 100, decoration: BoxDecoration(color: const Color(0xFFE4EDE8), borderRadius: BorderRadius.circular(20)));
+      return Container(
+        height: 100,
+        decoration: BoxDecoration(
+          color: const Color(0xFFE4EDE8),
+          borderRadius: BorderRadius.circular(20),
+        ),
+      );
     }
     return AnimatedBuilder(
       animation: ctrl,
-      builder: (_, __) => Container(
+      builder: (_, _) => Container(
         height: 100,
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(20),
@@ -710,6 +861,10 @@ class _HistoryScreenState extends State<HistoryScreen>
   }
 }
 
+// ─────────────────────────────────────────────
+//  REUSABLE WIDGETS
+// ─────────────────────────────────────────────
+
 class _AppBarAction extends StatelessWidget {
   final IconData icon;
   final VoidCallback onTap;
@@ -721,8 +876,12 @@ class _AppBarAction extends StatelessWidget {
     return GestureDetector(
       onTap: onTap,
       child: Container(
-        width: 36, height: 36,
-        decoration: BoxDecoration(color: (color ?? Colors.white).withOpacity(0.15), borderRadius: BorderRadius.circular(10)),
+        width: 36,
+        height: 36,
+        decoration: BoxDecoration(
+          color: (color ?? Colors.white).withValues(alpha: 0.15),
+          borderRadius: BorderRadius.circular(10),
+        ),
         child: Icon(icon, color: color ?? Colors.white, size: 18),
       ),
     );
@@ -737,13 +896,32 @@ class _MacroPill extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
-      decoration: BoxDecoration(color: color.withOpacity(0.1), borderRadius: BorderRadius.circular(7)),
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(6),
+      ),
       child: RichText(
-        text: TextSpan(children: [
-          TextSpan(text: '$abbr ', style: TextStyle(fontSize: 9, fontWeight: FontWeight.w800, color: color, letterSpacing: 0.5)),
-          TextSpan(text: value, style: TextStyle(fontSize: 10, fontWeight: FontWeight.w600, color: color)),
-        ]),
+        text: TextSpan(
+          children: [
+            TextSpan(
+              text: '$abbr ',
+              style: TextStyleHelper.labelSmall.copyWith(
+                fontSize: 8,
+                fontWeight: FontWeight.w800,
+                color: color,
+              ),
+            ),
+            TextSpan(
+              text: value,
+              style: TextStyleHelper.captionSmall.copyWith(
+                fontSize: 9,
+                fontWeight: FontWeight.w600,
+                color: color,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

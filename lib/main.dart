@@ -1,38 +1,39 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:provider/provider.dart';
 import 'screens/splashscreen.dart';
 import 'screens/onboarding_screen.dart';
 import 'screens/main_screen.dart';
 import 'data/nutrition_data.dart';
-import 'data/database_manager.dart';
+import 'providers/app_state.dart';
+
+final RouteObserver<ModalRoute<void>> routeObserver = 
+    RouteObserver<ModalRoute<void>>();
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   
-  // Load nutrition data
   await NutritionData.loadData();
   
-  // Initialize database manager
-  final dbManager = DatabaseManager();
-  await dbManager.init();
-
-  // Test apakah database berfungsi
-  if (await dbManager.isDatabaseOpen()) {
-    debugPrint('✅ Database ready');
-  } else {
-    debugPrint('❌ Database failed to open');
-  }
+  // Initialize database dan provider
+  final appState = AppState();
+  await appState.init();
   
   SystemChrome.setPreferredOrientations([
     DeviceOrientation.portraitUp,
     DeviceOrientation.portraitDown,
   ]);
   
-  runApp(const FoodDetectionApp()); // Hapus parameter
+  runApp(
+    ChangeNotifierProvider(
+      create: (_) => appState,
+      child: const FoodDetectionApp(),
+    ),
+  );
 }
 
 class FoodDetectionApp extends StatelessWidget {
-  const FoodDetectionApp({super.key}); // Hapus parameter isOnboardingCompleted
+  const FoodDetectionApp({super.key});
 
   @override
   Widget build(BuildContext context) {
@@ -54,12 +55,13 @@ class FoodDetectionApp extends StatelessWidget {
         ),
         useMaterial3: true,
       ),
-      initialRoute: '/splash', // Selalu mulai dari splash screen
+      initialRoute: '/splash',
       routes: {
         '/onboarding': (context) => const OnboardingScreen(),
         '/splash': (context) => const SplashScreen(),
         '/main': (context) => const MainScreen(),
       },
+      navigatorObservers: [routeObserver],
       debugShowCheckedModeBanner: false,
     );
   }

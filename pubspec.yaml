@@ -31,6 +31,10 @@ dependencies:
   path: ^1.9.1
 
   shared_preferences: ^2.0.15
+
+  provider: ^6.0.5
+
+  google_fonts: ^6.2.1
   
 dev_dependencies:
   flutter_test:
