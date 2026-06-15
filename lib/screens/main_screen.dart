@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'home_screen.dart';
 import 'scan_screen.dart';
-import 'history_screen.dart';
+import 'history/history_screen.dart';
+import 'missions_screen.dart';
+import 'education/education_screen.dart';
 import '../utils/app_colors.dart';
 import '../utils/text_style_helper.dart';
 
@@ -16,10 +18,51 @@ class _MainScreenState extends State<MainScreen> {
   int _currentIndex = 0;
 
   final List<Widget> _pages = const [
-    HomeScreen(),
-    ScanScreen(),
-    HistoryScreen(),
+    HomeScreen(),          // 0
+    ScanScreen(),          // 1
+    MissionsScreen(),     // 2
+    EducationScreen(),     // 3
+    HistoryScreen(),       // 4
   ];
+
+  final List<NavItem> _navItems = const [
+    NavItem(
+      index: 0,
+      label: "Beranda",
+      icon: Icons.home_outlined,
+      activeIcon: Icons.home_rounded,
+    ),
+    NavItem(
+      index: 1,
+      label: "Scan",
+      icon: Icons.auto_awesome_rounded,
+      activeIcon: Icons.auto_awesome_rounded,
+    ),
+    NavItem(
+      index: 2,
+      label: "Misi",
+      icon: Icons.emoji_events_rounded,
+      activeIcon: Icons.emoji_events_rounded,
+    ),
+    NavItem(
+      index: 3,
+      label: "Edukasi",
+      icon: Icons.school_outlined,
+      activeIcon: Icons.school_rounded,
+    ),
+    NavItem(
+      index: 4,
+      label: "Riwayat",
+      icon: Icons.history_outlined,
+      activeIcon: Icons.history_rounded,
+    ),
+  ];
+
+  void _changePage(int index) {
+    setState(() {
+      _currentIndex = index;
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -29,118 +72,98 @@ class _MainScreenState extends State<MainScreen> {
         index: _currentIndex,
         children: _pages,
       ),
-      
-      // Bilah Navigasi Bawah dengan tombol scan menonjol ke atas
-      bottomNavigationBar: Container(
-        color: Colors.transparent, // Transparan agar shadow tidak terlihat double
-        child: SafeArea(
-          top: false,
-          child: Container(
-            height: 60,
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: const BorderRadius.only(
-                topLeft: Radius.circular(24),
-                topRight: Radius.circular(24),
+
+      bottomNavigationBar: SafeArea(
+        top: false,
+        child: Container(
+          height: 82,
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: const BorderRadius.only(
+              topLeft: Radius.circular(24),
+              topRight: Radius.circular(24),
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.08),
+                blurRadius: 16,
+                offset: const Offset(0, -4),
               ),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.08),
-                  blurRadius: 16,
-                  offset: const Offset(0, -4),
-                ),
-              ],
-            ),
-            child: Stack(
-              clipBehavior: Clip.none,
-              children: [
-                // Baris tombol biasa (kiri dan kanan)
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.center,
-                  children: [
-                    // Tab Kiri: Beranda
-                    Expanded(
-                      child: _buildNavItem(
-                        index: 0,
-                        label: 'Beranda',
-                        icon: Icons.home_outlined,
-                        activeIcon: Icons.home_rounded,
-                      ),
-                    ),
-                    
-                    // Spacer untuk tombol scan di tengah
-                    const Expanded(
-                      child: SizedBox(),
-                    ),
-                    
-                    // Tab Kanan: Riwayat
-                    Expanded(
-                      child: _buildNavItem(
-                        index: 2,
-                        label: 'Riwayat',
-                        icon: Icons.history_outlined,
-                        activeIcon: Icons.history_rounded,
-                      ),
-                    ),
-                  ],
-                ),
-                
-                // Tombol Scan di Tengah (menonjol ke atas)
-                Positioned(
-                  left: 0,
-                  right: 0,
-                  top: -28,
-                  child: Center(
-                    child: _buildCenterNavItem(
-                      index: 1,
-                      label: 'Scan',
-                      icon: Icons.auto_awesome_rounded,
-                    ),
+            ],
+          ),
+          child: Stack(
+            clipBehavior: Clip.none,
+            alignment: Alignment.topCenter,
+            children: [
+              /// ==========================
+              /// MENU REGULER
+              /// ==========================
+              Row(
+                children: [
+                  Expanded(
+                    child: _buildRegularNavItem(_navItems[0]), // Beranda
                   ),
-                ),
-              ],
-            ),
+                  Expanded(
+                    child: _buildRegularNavItem(_navItems[4]), // Riwayat
+                  ),
+
+                  // Ruang kosong untuk tombol Scan
+                  const SizedBox(width: 80),
+
+                  Expanded(
+                    child: _buildRegularNavItem(_navItems[2]), // Jurnal
+                  ),
+                  Expanded(
+                    child: _buildRegularNavItem(_navItems[3]), // Edukasi
+                  ),
+                ],
+              ),
+
+              /// ==========================
+              /// TOMBOL SCAN (FLOATING)
+              /// ==========================
+              Positioned(
+                top: -28,
+                child: _buildCenterNavItem(_navItems[1]),
+              ),
+            ],
           ),
         ),
       ),
     );
   }
 
-  // =========================
-  // NAV ITEM STANDAR (Kiri & Kanan)
-  // =========================
-  Widget _buildNavItem({
-    required int index,
-    required String label,
-    required IconData icon,
-    required IconData activeIcon,
-  }) {
-    final bool isSelected = _currentIndex == index;
-    final color = isSelected ? AppColors.primary : AppColors.textLight;
+  // ==========================================================
+  // NAVIGATION ITEM BIASA
+  // ==========================================================
+  Widget _buildRegularNavItem(NavItem item) {
+    final bool isSelected = _currentIndex == item.index;
 
-    return GestureDetector(
-      onTap: () {
-        setState(() {
-          _currentIndex = index;
-        });
-      },
-      behavior: HitTestBehavior.opaque,
+    return InkWell(
+      onTap: () => _changePage(item.index),
+      borderRadius: BorderRadius.circular(16),
       child: SizedBox(
-        height: 60,
+        height: 82,
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
+            const SizedBox(height: 10),
             Icon(
-              isSelected ? activeIcon : icon,
-              color: color,
-              size: 22,
+              isSelected ? item.activeIcon : item.icon,
+              size: 23,
+              color: isSelected
+                  ? AppColors.primary
+                  : AppColors.textLight,
             ),
             const SizedBox(height: 4),
             Text(
-              label,
+              item.label,
               style: TextStyleHelper.captionSmall.copyWith(
-                color: color,
-                fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+                color: isSelected
+                    ? AppColors.primary
+                    : AppColors.textLight,
+                fontWeight:
+                    isSelected ? FontWeight.w700 : FontWeight.w500,
               ),
             ),
           ],
@@ -149,67 +172,88 @@ class _MainScreenState extends State<MainScreen> {
     );
   }
 
-  // =========================
-  // NAV ITEM TENGAH (Scan)
-  // =========================
-  Widget _buildCenterNavItem({
-    required int index,
-    required String label,
-    required IconData icon,
-  }) {
-    final bool isSelected = _currentIndex == index;
-    
+  // ==========================================================
+  // TOMBOL SCAN TENGAH
+  // ==========================================================
+  Widget _buildCenterNavItem(NavItem item) {
+    final bool isSelected = _currentIndex == item.index;
+
     return GestureDetector(
-      onTap: () {
-        setState(() {
-          _currentIndex = index;
-        });
-      },
+      onTap: () => _changePage(item.index),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Container(
-            width: 54,
-            height: 54,
+          AnimatedContainer(
+            duration: const Duration(milliseconds: 250),
+            width: 62,
+            height: 62,
             decoration: BoxDecoration(
               shape: BoxShape.circle,
               gradient: isSelected
                   ? const LinearGradient(
                       begin: Alignment.topLeft,
                       end: Alignment.bottomRight,
-                      colors: [AppColors.primary, AppColors.primaryDark],
+                      colors: [
+                        AppColors.primary,
+                        AppColors.primaryDark,
+                      ],
                     )
                   : const LinearGradient(
                       begin: Alignment.topLeft,
                       end: Alignment.bottomRight,
-                      colors: [AppColors.accent, AppColors.primary],
+                      colors: [
+                        AppColors.accent,
+                        AppColors.primary,
+                      ],
                     ),
               boxShadow: [
                 BoxShadow(
-                  color: isSelected
-                      ? AppColors.primary.withValues(alpha: 0.35)
-                      : AppColors.accent.withValues(alpha: 0.35),
-                  blurRadius: 12,
-                  offset: const Offset(0, 4),
+                  color: (isSelected
+                          ? AppColors.primary
+                          : AppColors.accent)
+                      .withValues(alpha: 0.35),
+                  blurRadius: 16,
+                  offset: const Offset(0, 5),
                 ),
               ],
             ),
-            child: Icon(
-              icon,
+            child: const Icon(
+              Icons.auto_awesome_rounded,
               color: Colors.white,
-              size: 26,
+              size: 28,
             ),
           ),
-          const SizedBox(height: 6),
+          const SizedBox(height: 8),
           Text(
-            label,
+            item.label,
             style: TextStyleHelper.captionSmall.copyWith(
-              color: isSelected ? AppColors.primary : AppColors.textMedium,
-              fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+              color: isSelected
+                  ? AppColors.primary
+                  : AppColors.textMedium,
+              fontWeight:
+                  isSelected ? FontWeight.w700 : FontWeight.w500,
             ),
           ),
         ],
       ),
     );
   }
+}
+
+// ==========================================================
+// MODEL ITEM NAVIGASI
+// ==========================================================
+
+class NavItem {
+  final int index;
+  final String label;
+  final IconData icon;
+  final IconData activeIcon;
+
+  const NavItem({
+    required this.index,
+    required this.label,
+    required this.icon,
+    required this.activeIcon,
+  });
 }

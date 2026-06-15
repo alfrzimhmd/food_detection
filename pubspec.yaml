@@ -47,8 +47,21 @@ flutter:
   assets:
     - assets/food_indonesia_model.tflite
     - assets/labels_indonesia.txt
-    - assets/nutrition_data.json
+    - assets/data/nutrition_data.json
+    - assets/data/education_data.json
+    - assets/data/missions.json
     - assets/images/logo.png
+    - assets/illustrations/cholesterol_management.png
+    - assets/illustrations/fiber_foods.png
+    - assets/illustrations/healthy_meal.png
+    - assets/illustrations/hydration.png
+    - assets/illustrations/indonesian_food.png
+    - assets/illustrations/nutrition_label.png
+    - assets/illustrations/protein_foods.png
+    - assets/illustrations/sugar_reduction.png
+    - assets/illustrations/nutrition_facts.png
+    - assets/illustrations/weight_management.png
+
   fonts:
     # Inter Font Family - setiap weight adalah family terpisah
     - family: InterRegular

@@ -11,7 +11,7 @@ class NutritionData {
     if (_isInitialized) return;
     
     try {
-      final String jsonString = await rootBundle.loadString('assets/nutrition_data.json');
+      final String jsonString = await rootBundle.loadString('assets/data/nutrition_data.json');
       final Map<String, dynamic> jsonData = json.decode(jsonString);
       
       final List<dynamic> foods = jsonData['foods'];

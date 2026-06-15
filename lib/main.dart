@@ -23,7 +23,7 @@ void main() async {
     DeviceOrientation.portraitUp,
     DeviceOrientation.portraitDown,
   ]);
-  
+
   runApp(
     ChangeNotifierProvider(
       create: (_) => appState,
