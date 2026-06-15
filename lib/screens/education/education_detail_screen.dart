@@ -116,10 +116,6 @@ class _EducationDetailScreenState extends State<EducationDetailScreen> {
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                     ),
-                    Text(
-                      '${widget.article.readTime} menit membaca',
-                      style: const TextStyle(color: Colors.white60, fontSize: 12),
-                    ),
                   ],
                 ),
               ),
@@ -193,7 +189,7 @@ class _EducationDetailScreenState extends State<EducationDetailScreen> {
               widget.article.title,
               style: const TextStyle(
                 color: Colors.white,
-                fontSize: 22,
+                fontSize: 26,
                 fontWeight: FontWeight.bold,
                 height: 1.3,
               ),
@@ -211,7 +207,8 @@ class _EducationDetailScreenState extends State<EducationDetailScreen> {
         child: Text(
           widget.article.title,
           style: TextStyleHelper.displaySmall.copyWith(
-            fontSize: 22,
+            fontSize: 26,
+            fontWeight: FontWeight.bold,
             color: isDark ? AppColors.textWhite : AppColors.textDark,
           ),
         ),
@@ -240,9 +237,11 @@ class _EducationDetailScreenState extends State<EducationDetailScreen> {
           Expanded(
             child: Text(
               widget.article.summary,
-              style: TextStyleHelper.bodyMedium.copyWith(
+              style: TextStyleHelper.bodyLarge.copyWith(
+                fontSize: 15,
                 color: isDark ? AppColors.textWhite70 : AppColors.textMedium,
                 fontStyle: FontStyle.italic,
+                height: 1.5,
               ),
             ),
           ),
@@ -255,71 +254,236 @@ class _EducationDetailScreenState extends State<EducationDetailScreen> {
     return Text(
       _formatContent(widget.article.content),
       style: TextStyleHelper.bodyLarge.copyWith(
+        fontSize: 18,
         color: isDark ? AppColors.textWhite70 : AppColors.textMedium,
-        height: 1.6,
+        height: 1.7,
       ),
     );
   }
 
+  // ============================================================
+  // REKOMENDASI ARTIKEL - DIPERBAIKI DENGAN CARD GAMBAR
+  // ============================================================
+  
   Widget _buildRecommendationsSection(bool isDark) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          'Artikel Rekomendasi',
-          style: TextStyleHelper.headline4.copyWith(
-            color: isDark ? AppColors.textWhite : AppColors.textDark,
-          ),
+        Row(
+          children: [
+            Container(
+              width: 32,
+              height: 32,
+              decoration: BoxDecoration(
+                color: AppColors.primary.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: const Icon(Icons.recommend_rounded, color: AppColors.primary, size: 18),
+            ),
+            const SizedBox(width: 12),
+            Text(
+              'Rekomendasi untuk Anda',
+              style: TextStyleHelper.headline4.copyWith(
+                fontSize: 20,
+                fontWeight: FontWeight.bold,
+                color: isDark ? AppColors.textWhite : AppColors.textDark,
+              ),
+            ),
+          ],
         ),
         const SizedBox(height: 16),
-        ..._recommendations.map((article) => _buildRecommendationCard(article)),
+        ListView.separated(
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          itemCount: _recommendations.length,
+          separatorBuilder: (context, index) => const SizedBox(height: 16),
+          itemBuilder: (context, index) {
+            final article = _recommendations[index];
+            return _buildRecommendationCard(article, isDark);
+          },
+        ),
       ],
     );
   }
 
-  Widget _buildRecommendationCard(EducationArticle article) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
+  Widget _buildRecommendationCard(EducationArticle article, bool isDark) {
+    final categoryColor = Color(int.parse(article.colorHex.replaceFirst('#', '0xFF')));
+    final hasImage = article.imageAsset != null && article.imageAsset!.isNotEmpty;
     
-    return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      decoration: BoxDecoration(
-        color: isDark ? AppColors.cardBackgroundDark : Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: isDark ? AppColors.dividerDark : AppColors.divider,
-        ),
-      ),
-      child: ListTile(
-        onTap: () {
-          Navigator.pushReplacement(
-            context,
-            MaterialPageRoute(
-              builder: (context) => EducationDetailScreen(article: article),
+    return GestureDetector(
+      onTap: () {
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(
+            builder: (context) => EducationDetailScreen(article: article),
+          ),
+        );
+      },
+      child: Container(
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: isDark
+                ? [AppColors.cardBackgroundDark, AppColors.cardBackgroundDark.withValues(alpha: 0.95)]
+                : [Colors.white, Colors.white.withValues(alpha: 0.95)],
+          ),
+          borderRadius: BorderRadius.circular(20),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.06),
+              blurRadius: 12,
+              offset: const Offset(0, 4),
             ),
-          );
-        },
-        leading: CircleAvatar(
-          backgroundColor: Color(int.parse(article.colorHex.replaceFirst('#', '0xFF'))).withValues(alpha: 0.1),
-          child: Icon(
-            Icons.article,
-            color: Color(int.parse(article.colorHex.replaceFirst('#', '0xFF'))),
-          ),
+          ],
         ),
-        title: Text(
-          article.title,
-          style: TextStyleHelper.titleSmall.copyWith(
-            color: isDark ? AppColors.textWhite : AppColors.textDark,
-          ),
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Banner gambar dengan kategori overlay
+            Stack(
+              children: [
+                ClipRRect(
+                  borderRadius: const BorderRadius.only(
+                    topLeft: Radius.circular(20),
+                    topRight: Radius.circular(20),
+                  ),
+                  child: hasImage
+                      ? Image.asset(
+                          article.imageAsset!,
+                          height: 140,
+                          width: double.infinity,
+                          fit: BoxFit.cover,
+                          errorBuilder: (context, error, stackTrace) {
+                            return Container(
+                              height: 140,
+                              width: double.infinity,
+                              color: categoryColor.withValues(alpha: 0.2),
+                              child: Icon(
+                                Icons.image_not_supported,
+                                size: 40,
+                                color: categoryColor,
+                              ),
+                            );
+                          },
+                        )
+                      : Container(
+                          height: 140,
+                          width: double.infinity,
+                          color: categoryColor.withValues(alpha: 0.2),
+                          child: Icon(
+                            Icons.food_bank,
+                            size: 40,
+                            color: categoryColor,
+                          ),
+                        ),
+                ),
+                // Gradient overlay untuk teks kategori
+                Positioned(
+                  bottom: 0,
+                  left: 0,
+                  right: 0,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.topCenter,
+                        end: Alignment.bottomCenter,
+                        colors: [
+                          Colors.transparent,
+                          Colors.black.withValues(alpha: 0.7),
+                        ],
+                      ),
+                    ),
+                    child: Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                          decoration: BoxDecoration(
+                            color: categoryColor,
+                            borderRadius: BorderRadius.circular(14),
+                          ),
+                          child: Text(
+                            article.category,
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 11,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            // Konten card
+            Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    article.title,
+                    style: TextStyleHelper.titleMedium.copyWith(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w700,
+                      color: isDark ? AppColors.textWhite : AppColors.textDark,
+                      height: 1.3,
+                    ),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  const SizedBox(height: 10),
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Icon(
+                        Icons.format_quote,
+                        size: 16,
+                        color: categoryColor.withValues(alpha: 0.7),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          article.summary,
+                          style: TextStyleHelper.bodySmall.copyWith(
+                            fontSize: 14,
+                            color: isDark ? AppColors.textWhite70 : AppColors.textLight,
+                            height: 1.5,
+                          ),
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 14),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.end,
+                    children: [
+                      Text(
+                        'Baca Selengkapnya',
+                        style: TextStyleHelper.labelMedium.copyWith(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                          color: categoryColor,
+                        ),
+                      ),
+                      const SizedBox(width: 6),
+                      Icon(
+                        Icons.arrow_forward_rounded,
+                        size: 16,
+                        color: categoryColor,
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ],
         ),
-        subtitle: Text(
-          article.category,
-          style: TextStyleHelper.caption.copyWith(
-            color: AppColors.textLight,
-          ),
-        ),
-        trailing: const Icon(Icons.chevron_right),
       ),
     );
   }

@@ -61,6 +61,8 @@ flutter:
     - assets/illustrations/sugar_reduction.png
     - assets/illustrations/nutrition_facts.png
     - assets/illustrations/weight_management.png
+    - assets/illustrations/good_fat_bad_fat.png
+    - assets/illustrations/breakfast.png
 
   fonts:
     # Inter Font Family - setiap weight adalah family terpisah
