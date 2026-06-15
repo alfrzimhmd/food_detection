@@ -55,11 +55,11 @@
     {
       "id": "sodium_easy_1",
       "name": "🧂 Sadar Sodium",
-      "description": "Scan 4 makanan dengan kandungan sodium ≤ 200 mg",
+      "description": "Scan 4 makanan dengan kandungan sodium ≤ 400 mg",
       "mission_type": "daily",
       "target_field": "sodium",
       "condition": "<=",
-      "condition_value": 200,
+      "condition_value": 400,
       "target_count": 4,
       "reward_points": 40,
       "badge_name": "Sadar Sodium",
