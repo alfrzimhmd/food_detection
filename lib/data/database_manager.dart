@@ -219,20 +219,7 @@ class DatabaseManager {
       await db.execute('CREATE INDEX idx_mission_progress_status ON user_mission_progress(status)');
       debugPrint('✅ Index-index berhasil dibuat');
 
-      // Insert default user profile
-      final now = DateTime.now().millisecondsSinceEpoch;
-      await db.insert('user_profile', {
-        'name': 'Pengguna',
-        'target_calories': 2000,
-        'target_protein': 50,
-        'target_carbs': 250,
-        'target_fat': 65,
-        'total_points': 0,
-        'badges': '[]',
-        'created_at': now,
-        'updated_at': now,
-      });
-      debugPrint('✅ Default user_profile ditambahkan');
+      debugPrint('⚠️ Tidak ada default user profile - onboarding akan muncul');
 
       debugPrint('🎉 Semua tabel berhasil dibuat!');
       
@@ -1084,38 +1071,65 @@ class DatabaseManager {
       debugPrint('❌ getUserLevel error: $e');
       return 'beginner';
     }
-  }
-
-  /// Dapatkan streak harian user berdasarkan penyelesaian misi
+    }
+    
+  /// Dapatkan streak harian user berdasarkan PENYELESAIAN MISI (bukan scan)
   Future<int> getUserStreak() async {
-    debugPrint('🔵 getUserStreak');
+    debugPrint('🔵 getUserStreak (from completed missions)');
     try {
       final completedMissions = await getCompletedMissionsHistory();
-      if (completedMissions.isEmpty) return 0;
-      
-      // Kelompokkan berdasarkan tanggal
-      final Map<String, int> missionsPerDay = {};
-      for (var mission in completedMissions) {
-        final date = mission['completed_date'].toString().substring(0, 10);
-        missionsPerDay[date] = (missionsPerDay[date] ?? 0) + 1;
+      if (completedMissions.isEmpty) {
+        debugPrint('📋 No completed missions yet, streak = 0');
+        return 0;
       }
       
-      // Hitung streak hari dengan minimal 1 misi selesai per hari
+      debugPrint('📋 Total completed missions: ${completedMissions.length}');
+      
+      // Debug: cetak semua completed missions dengan tanggalnya
+      for (var mission in completedMissions) {
+        debugPrint('   - Mission: ${mission['mission_id']}, completed: ${mission['completed_date']}');
+      }
+      
+      // Kelompokkan berdasarkan tanggal (hanya ambil unique date)
+      final Set<String> uniqueDates = {};
+      for (var mission in completedMissions) {
+        final completedDateStr = mission['completed_date'] as String;
+        // Ambil hanya bagian tanggal (YYYY-MM-DD)
+        final dateOnly = completedDateStr.length >= 10 
+            ? completedDateStr.substring(0, 10) 
+            : completedDateStr;
+        uniqueDates.add(dateOnly);
+        debugPrint('📅 Unique date added: $dateOnly');
+      }
+      
+      debugPrint('📅 Unique dates with completed missions: $uniqueDates');
+      
+      // Hitung streak dari hari ini kebelakang
       int streak = 0;
       final today = DateTime.now();
+      
       for (int i = 0; i < 30; i++) {
         final checkDate = today.subtract(Duration(days: i));
-        final dateKey = '${checkDate.year}-${checkDate.month}-${checkDate.day}';
+        final dateKey = '${checkDate.year}-${checkDate.month.toString().padLeft(2, '0')}-${checkDate.day.toString().padLeft(2, '0')}';
         
-        if (missionsPerDay.containsKey(dateKey) && (missionsPerDay[dateKey] ?? 0) >= 1) {
+        debugPrint('🔍 Checking date: $dateKey, i=$i');
+        
+        if (uniqueDates.contains(dateKey)) {
           streak++;
+          debugPrint('   ✅ Streak increased to $streak');
         } else {
+          if (i == 0) {
+            debugPrint('   ⚠️ No mission completed today yet, streak = 0');
+            return 0;
+          }
+          debugPrint('   ❌ Streak broken at day $i');
           break;
         }
       }
       
-      debugPrint('✅ User mission streak: $streak hari');
+      debugPrint('✅ Final user mission streak: $streak hari');
       return streak;
+      
     } catch (e) {
       debugPrint('❌ getUserStreak error: $e');
       return 0;
@@ -1609,19 +1623,6 @@ class DatabaseManager {
       await db.delete('user_mission_progress');
       await db.delete('completed_missions_history');
       await db.delete('user_badges');
-      
-      final now = DateTime.now().millisecondsSinceEpoch;
-      await db.insert('user_profile', {
-        'name': 'Pengguna',
-        'target_calories': 2000,
-        'target_protein': 50,
-        'target_carbs': 250,
-        'target_fat': 65,
-        'total_points': 0,
-        'badges': '[]',
-        'created_at': now,
-        'updated_at': now,
-      });
       
       debugPrint('✅ Complete reset selesai');
     } catch (e) {

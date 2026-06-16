@@ -119,7 +119,7 @@ class _MissionsScreenState extends State<MissionsScreen> with SingleTickerProvid
   }
 
   // ============================================================
-  // STATS HEADER - DIPERBAIKI DENGAN 5 STATISTIK
+  // STATS HEADER
   // ============================================================
   
   Widget _buildStatsHeader() {
@@ -155,7 +155,6 @@ class _MissionsScreenState extends State<MissionsScreen> with SingleTickerProvid
           ),
           child: Column(
             children: [
-              // Row 1: 3 stat utama
               Row(
                 children: [
                   _buildStatCard(
@@ -177,14 +176,13 @@ class _MissionsScreenState extends State<MissionsScreen> with SingleTickerProvid
                   _buildStatCard(
                     icon: Icons.workspace_premium_rounded,
                     value: badgesCount.toString(),
-                    label: 'Lencana',
+                    label: 'pencapaian',
                     color: const Color(0xFF9C27B0),
                     gradientColors: [const Color(0xFF9C27B0), const Color(0xFF7B1FA2)],
                   ),
                 ],
               ),
               const SizedBox(height: 14),
-              // Row 2: 2 stat tambahan
               Row(
                 children: [
                   _buildStatCardSmall(
@@ -324,7 +322,7 @@ class _MissionsScreenState extends State<MissionsScreen> with SingleTickerProvid
   }
 
   int _calculateWeeklyProgressFromTotal(int totalMissionsCompleted) {
-    const weeklyTarget = 20; // Target 20 misi per minggu
+    const weeklyTarget = 20;
     int progress = ((totalMissionsCompleted / weeklyTarget) * 100).toInt();
     return progress.clamp(0, 100);
   }
@@ -398,7 +396,25 @@ class _MissionsScreenState extends State<MissionsScreen> with SingleTickerProvid
               physics: const AlwaysScrollableScrollPhysics(),
               child: SizedBox(
                 height: MediaQuery.of(context).size.height - 400,
-                child: _buildEmptyState(),
+                child: _buildAllMissionsCompletedState(),
+              ),
+            ),
+          );
+        }
+        
+        // Cek apakah semua misi sudah selesai (completed atau claimed)
+        final allCompleted = missions.every((m) => 
+          m['status'] == 'completed' || m['status'] == 'claimed');
+        
+        if (allCompleted) {
+          return RefreshIndicator(
+            onRefresh: () => appState.refreshMissionData(),
+            color: AppColors.primary,
+            child: SingleChildScrollView(
+              physics: const AlwaysScrollableScrollPhysics(),
+              child: SizedBox(
+                height: MediaQuery.of(context).size.height - 400,
+                child: _buildAllMissionsCompletedState(),
               ),
             ),
           );
@@ -421,7 +437,7 @@ class _MissionsScreenState extends State<MissionsScreen> with SingleTickerProvid
     );
   }
 
-  Widget _buildEmptyState() {
+  Widget _buildAllMissionsCompletedState() {
     return Center(
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
@@ -430,24 +446,36 @@ class _MissionsScreenState extends State<MissionsScreen> with SingleTickerProvid
             width: 100,
             height: 100,
             decoration: BoxDecoration(
-              color: AppColors.primaryExtraLight,
+              gradient: LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [AppColors.primaryLight, AppColors.carbs],
+              ),
               shape: BoxShape.circle,
             ),
-            child: Icon(
-              Icons.emoji_events_outlined,
+            child: const Icon(
+              Icons.check_circle_rounded,
               size: 48,
-              color: AppColors.primary.withValues(alpha: 0.5),
+              color: Colors.white,
             ),
           ),
           const SizedBox(height: 20),
           Text(
-            'Belum ada misi hari ini',
-            style: TextStyleHelper.titleMedium.copyWith(color: AppColors.textLight),
+            'Semua Misi Selesai! 🎉',
+            style: TextStyleHelper.titleMedium.copyWith(
+              color: AppColors.primaryLight,
+              fontWeight: FontWeight.bold,
+            ),
           ),
           const SizedBox(height: 8),
           Text(
-            'Scan makanan untuk memulai misi!',
+            'Selamat! Anda telah menyelesaikan semua misi hari ini.',
             style: TextStyleHelper.bodySmall.copyWith(color: AppColors.textLight),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            'Kembali besok untuk misi baru!',
+            style: TextStyleHelper.caption.copyWith(color: AppColors.textLight),
           ),
         ],
       ),
@@ -735,7 +763,7 @@ class _MissionsScreenState extends State<MissionsScreen> with SingleTickerProvid
   }
 
   // ============================================================
-  // ACHIEVEMENTS TAB (Badges) - DIPERBAIKI LEBIH MENARIK
+  // ACHIEVEMENTS TAB (Badges)
   // ============================================================
   
   Widget _buildAchievementsTab() {
@@ -763,12 +791,12 @@ class _MissionsScreenState extends State<MissionsScreen> with SingleTickerProvid
                 ),
                 const SizedBox(height: 20),
                 Text(
-                  'Belum ada lencana',
+                  'Belum ada pencapaian',
                   style: TextStyleHelper.titleMedium.copyWith(color: AppColors.textLight),
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  'Selesaikan misi untuk mendapatkan lencana!',
+                  'Selesaikan misi untuk mendapatkan pencapaian!',
                   style: TextStyleHelper.bodySmall.copyWith(color: AppColors.textLight),
                 ),
               ],
@@ -851,7 +879,6 @@ class _MissionsScreenState extends State<MissionsScreen> with SingleTickerProvid
         ),
         child: Stack(
           children: [
-            // Background pattern
             Positioned(
               top: -10,
               right: -10,
@@ -876,7 +903,6 @@ class _MissionsScreenState extends State<MissionsScreen> with SingleTickerProvid
                 ),
               ),
             ),
-            // Konten
             Padding(
               padding: const EdgeInsets.all(16),
               child: Column(
@@ -939,7 +965,6 @@ class _MissionsScreenState extends State<MissionsScreen> with SingleTickerProvid
                 ],
               ),
             ),
-            // Ribbon effect untuk badge langka
             if (isRare)
               Positioned(
                 top: 8,
@@ -1093,7 +1118,7 @@ class _MissionsScreenState extends State<MissionsScreen> with SingleTickerProvid
                           const Icon(Icons.workspace_premium, color: AppColors.warning),
                           const SizedBox(width: 8),
                           Text(
-                            'Lencana: $badgeName',
+                            'pencapaian: $badgeName',
                             style: TextStyleHelper.titleMedium.copyWith(color: AppColors.warning),
                           ),
                         ],
@@ -1105,7 +1130,7 @@ class _MissionsScreenState extends State<MissionsScreen> with SingleTickerProvid
               actions: [
                 TextButton(
                   onPressed: () => Navigator.pop(successContext),
-                  child: Text('Lihat Lencana', style: TextStyleHelper.labelMedium.copyWith(color: AppColors.primary)),
+                  child: Text('Lihat pencapaian', style: TextStyleHelper.labelMedium.copyWith(color: AppColors.primary)),
                 ),
                 ElevatedButton(
                   onPressed: () => Navigator.pop(successContext),

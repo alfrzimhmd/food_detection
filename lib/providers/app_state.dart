@@ -74,17 +74,24 @@ class AppState extends ChangeNotifier {
       // Inisialisasi MissionService
       _missionService = MissionService();
       
-      // Load missions dari JSON (hanya sekali)
-      await _missionService.loadMissionsFromJson();
+      // 🔥 PERBAIKAN: Cek user profile TERLEBIH DAHULU
+      _userProfile = await _dbManager.getUserProfile();
+      _isOnboarded = _userProfile != null;
       
-      // Cek dan reset misi harian
-      await _missionService.checkAndResetDailyMissions();
+      debugPrint('🔍 User profile exists: $_isOnboarded');
       
-      await checkOnboardingStatus();
       if (_isOnboarded) {
+        // Hanya load misi jika user sudah ada profile
+        await _missionService.loadMissionsFromJson();
+        await _missionService.checkAndResetDailyMissions();
         await loadHomeData();
         await loadMissionData();
+      } else {
+        // Reset onboarding flag di SharedPreferences untuk jaga-jaga
+        await _dbManager.setOnboardingCompleted(false);
+        debugPrint('⚠️ No user profile found, onboarding required');
       }
+      
     } catch (e) {
       debugPrint('❌ Init error: $e');
     } finally {
@@ -92,7 +99,7 @@ class AppState extends ChangeNotifier {
       notifyListeners();
     }
   }
-  
+    
   // Check if user has profile
   Future<void> checkOnboardingStatus() async {
     _userProfile = await _dbManager.getUserProfile();
@@ -100,7 +107,6 @@ class AppState extends ChangeNotifier {
     notifyListeners();
   }
   
-  // 🎯 Load mission data
   Future<void> loadMissionData() async {
     if (!_isOnboarded) return;
     
@@ -111,14 +117,14 @@ class AppState extends ChangeNotifier {
       final results = await Future.wait([
         _missionService.getTodayActiveMissions(),
         _missionService.getMissionStats(),
-        _missionService.getUserStreak(),
+        _dbManager.getUserStreak(), // 🔥 Pastikan panggil dari dbManager langsung
       ]);
       
       _dailyMissions = results[0] as List<Map<String, dynamic>>;
       _missionStats = results[1] as Map<String, dynamic>;
-      _userStreak = results[2] as int;
+      _userStreak = results[2] as int; // 🔥 Ini sekarang streak dari completed missions
       
-      debugPrint('🎯 Mission data loaded: ${_dailyMissions.length} missions, $_userStreak streak');
+      debugPrint('🎯 Mission data loaded: ${_dailyMissions.length} missions, mission streak: $_userStreak');
       
     } catch (e) {
       debugPrint('❌ Load mission data error: $e');
@@ -127,7 +133,7 @@ class AppState extends ChangeNotifier {
       notifyListeners();
     }
   }
-  
+
   // 🎯 Refresh mission data only
   Future<void> refreshMissionData() async {
     if (!_isOnboarded) return;
@@ -185,7 +191,6 @@ class AppState extends ChangeNotifier {
     }
   }
   
-  // Save user profile (onboarding)
   Future<bool> saveUserProfile({
     required String name,
     required int targetCalories,
@@ -207,6 +212,10 @@ class AppState extends ChangeNotifier {
       
       _userProfile = await _dbManager.getUserProfile();
       _isOnboarded = true;
+      
+      // 🔥 Setelah onboarding, load misi
+      await _missionService.loadMissionsFromJson();
+      await _missionService.checkAndResetDailyMissions();
       await loadHomeData();
       await loadMissionData();
       

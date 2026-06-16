@@ -141,13 +141,11 @@ class MissionService {
 
   /// Dapatkan streak user
   Future<int> getUserStreak() async {
-    debugPrint('🔵 getUserStreak');
-    
+    debugPrint('🔵 getUserStreak from mission service');
     try {
-      final streak = await _db.getUserStreak();
-      debugPrint('✅ User streak: $streak hari');
+      final streak = await _db.getUserStreak(); // 🔥 Pastikan ini memanggil method yang benar
+      debugPrint('✅ User mission streak: $streak hari');
       return streak;
-      
     } catch (e) {
       debugPrint('❌ getUserStreak error: $e');
       return 0;

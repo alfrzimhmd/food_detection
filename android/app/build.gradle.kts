@@ -31,9 +31,20 @@ android {
     }
 
     buildTypes {
+        debug {
+            // Supaya debug dan release bisa terinstall bersamaan
+            applicationIdSuffix = ".debug"
+
+            // Tambahan versi untuk membedakan debug
+            versionNameSuffix = "-debug"
+
+            // Nama aplikasi yang tampil di launcher
+            resValue("string", "app_name", "StudyMate (Debug)")
+        }
+
         release {
-            // TODO: Add your own signing config for the release build.
-            // Signing with the debug keys for now, so `flutter run --release` works.
+            // Sementara masih menggunakan debug signing
+            // Untuk production nanti sebaiknya gunakan release keystore sendiri
             signingConfig = signingConfigs.getByName("debug")
         }
     }

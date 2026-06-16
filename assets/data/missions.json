@@ -68,11 +68,11 @@
     {
       "id": "sodium_easy_2",
       "name": "💙 Jaga Jantung",
-      "description": "Scan 3 makanan dengan kandungan sodium ≤ 250 mg",
+      "description": "Scan 3 makanan dengan kandungan sodium ≤ 300 mg",
       "mission_type": "daily",
       "target_field": "sodium",
       "condition": "<=",
-      "condition_value": 250,
+      "condition_value": 300,
       "target_count": 3,
       "reward_points": 35,
       "badge_name": null,
