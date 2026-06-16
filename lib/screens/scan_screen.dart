@@ -34,7 +34,7 @@ class _ScanScreenState extends State<ScanScreen> with TickerProviderStateMixin {
   int _processingStep = 0;
   bool _showCatalogue = true;
   
-  // 🔥 Untuk menyimpan data sementara
+  //  Untuk menyimpan data sementara
   List<int>? _pendingImageBytes;
   // ignore: unused_field
   String? _pendingImagePath;  // Digunakan untuk menyimpan path gambar sementara, akan digunakan saat update history
@@ -145,7 +145,7 @@ class _ScanScreenState extends State<ScanScreen> with TickerProviderStateMixin {
     }
   }
 
-  // 🔥 Method untuk menyimpan history dengan hasil prediksi awal
+  // Method untuk menyimpan history dengan hasil prediksi awal
   Future<void> _saveInitialScanHistory({
     required String label,
     required String imagePath,
@@ -172,10 +172,10 @@ class _ScanScreenState extends State<ScanScreen> with TickerProviderStateMixin {
     );
     
     _lastSavedHistoryId = id;
-    debugPrint('✅ Initial scan history saved with id=$id');
+    debugPrint(' Initial scan history saved with id=$id');
   }
 
-  // 🔥 Method untuk mengupdate history dengan hasil koreksi
+  //  Method untuk mengupdate history dengan hasil koreksi
   Future<void> _updateHistoryWithCorrection({
     required String correctedLabel,
     required int historyId,
@@ -183,7 +183,7 @@ class _ScanScreenState extends State<ScanScreen> with TickerProviderStateMixin {
     final fd = NutritionData.getFoodData(correctedLabel);
     final dbManager = DatabaseManager();
     
-    debugPrint('✏️ Updating history id=$historyId with correction: $correctedLabel');
+    debugPrint(' Updating history id=$historyId with correction: $correctedLabel');
     
     final db = await dbManager.database;
     final now = DateTime.now().millisecondsSinceEpoch;
@@ -209,7 +209,7 @@ class _ScanScreenState extends State<ScanScreen> with TickerProviderStateMixin {
       whereArgs: [historyId],
     );
     
-    debugPrint('✅ History updated with correction');
+    debugPrint(' History updated with correction');
     
     // Refresh AppState agar UI terupdate
     if (mounted) {
@@ -415,9 +415,9 @@ class _ScanScreenState extends State<ScanScreen> with TickerProviderStateMixin {
         selectedImage: _selectedImage,
         prediction: _predictionResult!,
         onCorrected: (correctedLabel, sheetContext) async {
-          debugPrint('✏️ Correction callback received: $correctedLabel');
+          debugPrint(' Correction callback received: $correctedLabel');
           
-          // 🔥 Tampilkan success dialog IMMEDIATELY (tanpa nunggu proses selesai)
+          //  Tampilkan success dialog IMMEDIATELY (tanpa nunggu proses selesai)
           if (mounted) {
             _showSuccessCorrectionDialog(rootContext, correctedLabel);
           }
@@ -430,7 +430,7 @@ class _ScanScreenState extends State<ScanScreen> with TickerProviderStateMixin {
     );
   }
 
-  // 🔥 Method baru untuk proses background
+  //  Method baru untuk proses background
   Future<void> _processCorrectionInBackground(String correctedLabel) async {
     try {
       // 1. Simpan koreksi ke database corrections
@@ -450,7 +450,7 @@ class _ScanScreenState extends State<ScanScreen> with TickerProviderStateMixin {
         );
       }
       
-      debugPrint('✅ Background correction process completed');
+      debugPrint(' Background correction process completed');
     } catch (e) {
       debugPrint('❌ Background correction error: $e');
       if (mounted) {

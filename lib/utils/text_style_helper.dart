@@ -1,16 +1,11 @@
 // lib/utils/text_style_helper.dart
-// SPDX-License-Identifier: Apache-2.0
-
 import 'package:flutter/material.dart';
 
 /// Helper untuk mengatur TextStyle secara konsisten di semua platform
 /// Menggunakan font dari assets/fonts/ dengan weight yang eksplisit
 class TextStyleHelper {
   
-  // ============================================================
   // HEADLINE STYLES (Plus Jakarta Sans - Weight 800)
-  // ============================================================
-  
   static TextStyle get headline1 {
     return const TextStyle(
       fontFamily: 'PlusJakartaSansExtraBold',

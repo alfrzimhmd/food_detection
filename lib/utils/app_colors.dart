@@ -1,6 +1,4 @@
 // lib/utils/app_colors.dart
-// SPDX-License-Identifier: Apache-2.0
-
 import 'package:flutter/material.dart';
 
 /// Centralized color palette for the entire application

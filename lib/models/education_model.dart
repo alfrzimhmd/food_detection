@@ -1,5 +1,4 @@
 // lib/models/education_model.dart
-// SPDX-License-Identifier: Apache-2.0
 import 'package:flutter/material.dart';
 
 /// Model untuk data edukasi dari file JSON

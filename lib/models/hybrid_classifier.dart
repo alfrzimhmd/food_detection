@@ -1,4 +1,5 @@
-// HYBRID CLASSIFIER - CNN + SQLite Cache + Validasi Gambar :
+// HYBRID CLASSIFIER - CNN + SQLite Cache + Validasi Gambar
+// Fitur:
 // 1. Deteksi makanan dengan CNN (MobileNetV2, 19 kelas)
 // 2. Cache koreksi user di SQLite (belajar dari kesalahan)
 // 3. Validasi gambar ringan (keburaman sampling, ukuran, format)
@@ -14,16 +15,19 @@ import 'package:image/image.dart' as img;
 import 'package:flutter/services.dart';
 import '../data/database_manager.dart';
 
+/// Hybrid classifier yang menggabungkan CNN, SQLite cache, dan validasi gambar
 class HybridFoodClassifier {
   late Interpreter _cnnModel;
   late List<String> _labels;
   late DatabaseManager _db;
   
+  // Konstanta untuk konfigurasi klasifikasi
   static const int numClasses = 19;
-  static const double nonFoodThreshold = 0.50;      // < 50% = bukan makanan
-  static const double lowConfidenceThreshold = 0.70; // < 70% = warning
-  static const int predictionTimeoutSeconds = 8;     // Toleransi sedikit lebih longgar untuk Isolate
+  static const double nonFoodThreshold = 0.50;      // Kurang dari 50% = bukan makanan
+  static const double lowConfidenceThreshold = 0.70; // Kurang dari 70% = warning
+  static const int predictionTimeoutSeconds = 8;     // Timeout untuk prediksi
   
+  /// Memuat model CNN dan labels dari assets
   Future<void> loadModel() async {
     try {
       _cnnModel = await Interpreter.fromAsset('assets/food_indonesia_model.tflite');
@@ -45,6 +49,7 @@ class HybridFoodClassifier {
     }
   }
   
+  /// Menghitung hash gambar untuk cache
   String _computeImageHash(List<int> imageBytes) {
     var hash = 0;
     for (int i = 0; i < imageBytes.length; i++) {
@@ -53,9 +58,8 @@ class HybridFoodClassifier {
     return hash.toRadixString(16).padLeft(8, '0');
   }
 
-  // ===========================================================================
-  // BACKGROUND ISOLATE PIPELINE (Dijalankan di luar Isolate Utama)
-  // ===========================================================================
+  // ==================== BACKGROUND ISOLATE PIPELINE ====================
+  // Dijalankan di luar Isolate Utama untuk preprocessing gambar
   
   /// Fungsi tingkat atas / statis untuk menangani preprocessing gambar di thread terpisah.
   /// Ini membebaskan Isolate Utama dari proses decoding & manipulasi piksel yang lambat.
@@ -67,7 +71,7 @@ class HybridFoodClassifier {
     const double blurThreshold = 250.0;
     const int blurSampleRate = 20;
 
-    // 1. Cek ukuran file
+    // 1. Validasi ukuran file
     if (imageBytes.length < minFileSize) {
       return {
         'isValid': false,
@@ -162,10 +166,9 @@ class HybridFoodClassifier {
     };
   }
 
-  // ===========================================================================
-  // PREDIKSI DENGAN TIMEOUT & REAKTIVITAS
-  // ===========================================================================
+  // ==================== PREDIKSI DENGAN TIMEOUT ====================
   
+  /// Prediksi dengan timeout untuk mencegah freeze
   Future<Prediction> predictWithTimeout(List<int> imageBytes) async {
     try {
       return await predict(imageBytes).timeout(
@@ -195,6 +198,7 @@ class HybridFoodClassifier {
     }
   }
   
+  /// Proses prediksi utama dengan cache checking dan CNN inference
   Future<Prediction> predict(List<int> imageBytes) async {
     // STEP 1: Hitung hash gambar asli (Sangat cepat di thread utama)
     final imageHash = _computeImageHash(imageBytes);
@@ -218,7 +222,7 @@ class HybridFoodClassifier {
       debugPrint('Database cache query error: $dbError');
     }
     
-    // STEP 3: Delegasikan seluruh komputasi berat gambar ke Background Isolate (compute)
+    // STEP 3: Delegasikan seluruh komputasi berat gambar ke Background Isolate
     debugPrint('[Isolate] Delegating preprocessing tasks...');
     final preprocessResult = await compute(_preprocessImageTask, imageBytes);
     
@@ -301,7 +305,7 @@ class HybridFoodClassifier {
     }
     
     final isLowConf = maxProb < lowConfidenceThreshold;
-    debugPrint('[CNN] Result: $predictedLabel (${(maxProb * 100).toStringAsFixed(1)}%)${isLowConf ? " ⚠️ low confidence" : ""}');
+    debugPrint('[CNN] Result: $predictedLabel (${(maxProb * 100).toStringAsFixed(1)}%)${isLowConf ? " low confidence" : ""}');
     
     return Prediction(
       label: predictedLabel,
@@ -313,10 +317,9 @@ class HybridFoodClassifier {
     );
   }
   
-  // ===========================================================================
-  // BELAJAR DARI MASUKAN PENGGUNA (FEEDBACK)
-  // ===========================================================================
+  // ==================== BELAJAR DARI MASUKAN PENGGUNA ====================
   
+  /// Menyimpan feedback user untuk pembelajaran model
   Future<void> learnFromFeedback({
     required List<int> imageBytes,
     required String originalPrediction,
@@ -338,7 +341,7 @@ class HybridFoodClassifier {
         if (existingLabel == correctLabel) {
           return;
         }
-        debugPrint('[Learning] Updating correction cache: $existingLabel → $correctLabel');
+        debugPrint('[Learning] Updating correction cache: $existingLabel -> $correctLabel');
       }
       
       await _db.insertOrUpdateCorrection(
@@ -354,12 +357,12 @@ class HybridFoodClassifier {
     }
   }
   
-  // ===========================================================================
-  // UTILITY
-  // ===========================================================================
+  // ==================== UTILITY METHODS ====================
   
+  /// Mendapatkan daftar label makanan
   List<String> get labels => _labels;
   
+  /// Mendapatkan ukuran cache koreksi
   Future<int> getCacheSize() async {
     try {
       return await _db.getCorrectionsCount();
@@ -368,19 +371,20 @@ class HybridFoodClassifier {
     }
   }
   
+  /// Mereset semua cache koreksi
   Future<void> resetCache() async {
     await _db.deleteAllCorrections();
   }
   
+  /// Membersihkan resource model
   void dispose() {
     _cnnModel.close();
   }
 }
 
-// ===========================================================================
-// DATA CLASSES
-// ===========================================================================
+// ==================== DATA CLASSES ====================
 
+/// Model hasil prediksi
 class Prediction {
   final String label;
   final double probability;
@@ -404,6 +408,9 @@ class Prediction {
     this.topPredictions,
   });
   
+  /// Cek apakah ada error
   bool get hasError => errorCode != null;
+  
+  /// Cek apakah bukan makanan
   bool get isNotFood => errorCode == 'NOT_FOOD';
 }

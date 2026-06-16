@@ -1,15 +1,16 @@
 // lib/services/education_service.dart
-// SPDX-License-Identifier: Apache-2.0
-
 import 'dart:convert';
 import 'package:flutter/services.dart';
 import 'package:flutter/foundation.dart';
 import '../models/education_model.dart';
 
 /// Service untuk mengelola data edukasi
+/// Bertanggung jawab untuk memuat, mencari, dan memfilter artikel edukasi
 class EducationService {
+  // Path file JSON di assets
   static const String _educationJsonPath = 'assets/data/education_data.json';
   
+  // Daftar semua artikel yang sudah dimuat
   List<EducationArticle> _allArticles = [];
   
   /// Load data edukasi dari file JSON di assets

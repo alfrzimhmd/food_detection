@@ -6,9 +6,9 @@ import '../providers/app_state.dart';
 import '../utils/app_colors.dart';
 import '../utils/text_style_helper.dart';
 
-// ─────────────────────────────────────────────
-//  DATA MODEL
-// ─────────────────────────────────────────────
+// ==================== DATA MODEL ====================
+
+/// Model data untuk setiap halaman onboarding
 class OnboardingData {
   final String tag;
   final String title;
@@ -25,9 +25,10 @@ class OnboardingData {
   });
 }
 
-// ─────────────────────────────────────────────
-//  ONBOARDING SCREEN
-// ─────────────────────────────────────────────
+// ==================== ONBOARDING SCREEN ====================
+
+/// Halaman onboarding untuk pengguna baru
+/// Menampilkan 3 halaman: pengenalan, cara kerja, dan form profil
 class OnboardingScreen extends StatefulWidget {
   const OnboardingScreen({super.key});
 
@@ -37,9 +38,12 @@ class OnboardingScreen extends StatefulWidget {
 
 class _OnboardingScreenState extends State<OnboardingScreen>
     with TickerProviderStateMixin {
+  // ==================== CONTROLLERS ====================
+  
   final PageController _pageController = PageController();
   int _currentPage = 0;
 
+  // Form controllers untuk profil user
   final TextEditingController _nameController = TextEditingController();
   final TextEditingController _targetCaloriesController = TextEditingController(text: '2000');
   final TextEditingController _targetProteinController = TextEditingController(text: '50');
@@ -48,20 +52,27 @@ class _OnboardingScreenState extends State<OnboardingScreen>
 
   bool _isLoading = false;
 
+  // ==================== ANIMATION CONTROLLERS ====================
+  
+  // Animasi icon (scale & rotate)
   late final AnimationController _iconController;
   late final Animation<double> _iconScale;
   late final Animation<double> _iconRotate;
+  
+  // Animasi konten (fade & slide)
   late final AnimationController _contentController;
   late final Animation<double> _contentFade;
   late final Animation<Offset> _contentSlide;
 
-  // Per-page subtle bg tints using AppColors
+  // Warna latar belakang per halaman
   static const List<Color> _pageBgColors = [
     Color(0xFFF0FAF4),
     Color(0xFFE8F6EF),
     Color(0xFFF0FAF4),
   ];
 
+  // ==================== DATA PAGES ====================
+  
   static const _pages = [
     OnboardingData(
       tag: 'SELAMAT DATANG',
@@ -86,14 +97,19 @@ class _OnboardingScreenState extends State<OnboardingScreen>
     ),
   ];
 
+  // ==================== LIFECYCLE ====================
+  
   @override
   void initState() {
     super.initState();
+    
+    // Set status bar style
     SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(
       statusBarColor: Colors.transparent,
       statusBarIconBrightness: Brightness.dark,
     ));
 
+    // Inisialisasi animasi icon
     _iconController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 900),
@@ -106,6 +122,7 @@ class _OnboardingScreenState extends State<OnboardingScreen>
       CurvedAnimation(parent: _iconController, curve: Curves.easeOut),
     );
 
+    // Inisialisasi animasi konten
     _contentController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 500),
@@ -119,12 +136,14 @@ class _OnboardingScreenState extends State<OnboardingScreen>
       end: Offset.zero,
     ).animate(CurvedAnimation(parent: _contentController, curve: Curves.easeOut));
 
+    // Mulai animasi
     _iconController.forward();
     _contentController.forward();
   }
 
   @override
   void dispose() {
+    // Bersihkan semua controller
     _pageController.dispose();
     _iconController.dispose();
     _contentController.dispose();
@@ -136,12 +155,17 @@ class _OnboardingScreenState extends State<OnboardingScreen>
     super.dispose();
   }
 
+  // ==================== NAVIGATION ====================
+  
+  /// Handler saat halaman berubah
   void _onPageChanged(int page) {
     setState(() => _currentPage = page);
+    // Reset animasi
     _iconController.forward(from: 0);
     _contentController.forward(from: 0);
   }
 
+  /// Navigasi ke halaman berikutnya
   void _nextPage() {
     if (_currentPage < _pages.length - 1) {
       _pageController.nextPage(
@@ -153,6 +177,7 @@ class _OnboardingScreenState extends State<OnboardingScreen>
     }
   }
 
+  /// Navigasi ke halaman sebelumnya
   void _prevPage() {
     _pageController.previousPage(
       duration: const Duration(milliseconds: 420),
@@ -160,14 +185,19 @@ class _OnboardingScreenState extends State<OnboardingScreen>
     );
   }
 
+  // ==================== SAVE PROFILE ====================
+  
+  /// Menyimpan profil user dan navigasi ke main screen
   Future<void> _saveUserProfile() async {
     FocusScope.of(context).unfocus();
 
+    // Validasi nama
     if (_nameController.text.trim().isEmpty) {
       _showSnackBar('Harap masukkan nama Anda', isError: true);
       return;
     }
 
+    // Parsing nilai nutrisi
     final calories = int.tryParse(_targetCaloriesController.text);
     final protein = double.tryParse(_targetProteinController.text);
     final carbs = double.tryParse(_targetCarbsController.text);
@@ -203,6 +233,9 @@ class _OnboardingScreenState extends State<OnboardingScreen>
     }
   }
 
+  // ==================== SNACKBAR ====================
+  
+  /// Menampilkan snackbar dengan pesan
   void _showSnackBar(String message, {bool isError = false}) {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
@@ -225,7 +258,8 @@ class _OnboardingScreenState extends State<OnboardingScreen>
     );
   }
 
-  // ─── BUILD ───────────────────────────────────
+  // ==================== BUILD ====================
+  
   @override
   Widget build(BuildContext context) {
     final page = _pages[_currentPage];
@@ -255,7 +289,9 @@ class _OnboardingScreenState extends State<OnboardingScreen>
     );
   }
 
-  // ─── TOP BAR ─────────────────────────────────
+  // ==================== TOP BAR ====================
+  
+  /// Membangun top bar dengan step dots dan tombol skip
   Widget _buildTopBar(bool isLast) {
     return Padding(
       padding: const EdgeInsets.fromLTRB(24, 16, 24, 0),
@@ -317,7 +353,9 @@ class _OnboardingScreenState extends State<OnboardingScreen>
     );
   }
 
-  // ─── PAGE CONTENT ────────────────────────────
+  // ==================== PAGE CONTENT ====================
+  
+  /// Membangun konten halaman onboarding
   Widget _buildPage(OnboardingData page, int index) {
     final isForm = index == _pages.length - 1;
 
@@ -329,7 +367,7 @@ class _OnboardingScreenState extends State<OnboardingScreen>
         children: [
           const SizedBox(height: 48),
 
-          // Icon block
+          // Icon block (tidak untuk halaman form)
           if (!isForm) ...[
             ScaleTransition(
               scale: _iconScale,
@@ -341,7 +379,7 @@ class _OnboardingScreenState extends State<OnboardingScreen>
             const SizedBox(height: 40),
           ],
 
-          // Tag
+          // Konten dengan animasi fade & slide
           FadeTransition(
             opacity: _contentFade,
             child: SlideTransition(
@@ -349,6 +387,7 @@ class _OnboardingScreenState extends State<OnboardingScreen>
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
+                  // Tag
                   Text(
                     page.tag,
                     style: TextStyleHelper.labelSmall.copyWith(
@@ -357,6 +396,8 @@ class _OnboardingScreenState extends State<OnboardingScreen>
                     ),
                   ),
                   const SizedBox(height: 10),
+                  
+                  // Title
                   Text(
                     page.title,
                     style: TextStyleHelper.headline1.copyWith(
@@ -364,9 +405,13 @@ class _OnboardingScreenState extends State<OnboardingScreen>
                     ),
                   ),
                   const SizedBox(height: 8),
+                  
+                  // Subtitle badge
                   if (!isForm) ...[
                     _buildSubtitleBadge(page.subtitle),
                     const SizedBox(height: 16),
+                    
+                    // Description
                     Text(
                       page.description,
                       style: TextStyleHelper.bodyMedium.copyWith(
@@ -374,6 +419,8 @@ class _OnboardingScreenState extends State<OnboardingScreen>
                       ),
                     ),
                     const SizedBox(height: 24),
+                    
+                    // Feature pills
                     _buildFeaturePills(index),
                   ],
                 ],
@@ -381,6 +428,7 @@ class _OnboardingScreenState extends State<OnboardingScreen>
             ),
           ),
 
+          // Form (halaman terakhir)
           if (isForm) ...[
             const SizedBox(height: 4),
             FadeTransition(
@@ -398,6 +446,7 @@ class _OnboardingScreenState extends State<OnboardingScreen>
     );
   }
 
+  /// Membangun icon block dengan animasi
   Widget _buildIconBlock(OnboardingData page) {
     return Container(
       width: 90,
@@ -417,6 +466,7 @@ class _OnboardingScreenState extends State<OnboardingScreen>
     );
   }
 
+  /// Membangun badge subtitle
   Widget _buildSubtitleBadge(String text) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
@@ -433,6 +483,7 @@ class _OnboardingScreenState extends State<OnboardingScreen>
     );
   }
 
+  /// Membangun feature pills (fitur-fitur unggulan)
   Widget _buildFeaturePills(int pageIndex) {
     final features = const [
       [
@@ -487,7 +538,9 @@ class _OnboardingScreenState extends State<OnboardingScreen>
     );
   }
 
-  // ─── FORM ─────────────────────────────────────
+  // ==================== FORM ====================
+  
+  /// Membangun form profil user
   Widget _buildForm() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -518,7 +571,7 @@ class _OnboardingScreenState extends State<OnboardingScreen>
         ),
         const SizedBox(height: 14),
 
-        // 2-column grid
+        // 2-column grid untuk nutrisi
         Row(
           children: [
             Expanded(
@@ -602,6 +655,7 @@ class _OnboardingScreenState extends State<OnboardingScreen>
     );
   }
 
+  /// Membangun label section dengan icon
   Widget _buildSectionLabel(String text, IconData icon) {
     return Row(
       children: [
@@ -617,6 +671,7 @@ class _OnboardingScreenState extends State<OnboardingScreen>
     );
   }
 
+  /// Membangun text field dengan styling custom
   Widget _buildTextField({
     required TextEditingController controller,
     required String hint,
@@ -670,6 +725,7 @@ class _OnboardingScreenState extends State<OnboardingScreen>
     );
   }
 
+  /// Membangun card input nutrisi
   Widget _buildNutritionCard({
     required TextEditingController controller,
     required String label,
@@ -749,7 +805,9 @@ class _OnboardingScreenState extends State<OnboardingScreen>
     );
   }
 
-  // ─── BOTTOM BAR ──────────────────────────────
+  // ==================== BOTTOM BAR ====================
+  
+  /// Membangun bottom bar dengan tombol navigasi
   Widget _buildBottomBar(OnboardingData page, bool isLast) {
     return Container(
       padding: const EdgeInsets.fromLTRB(24, 12, 24, 28),
@@ -782,6 +840,7 @@ class _OnboardingScreenState extends State<OnboardingScreen>
     );
   }
 
+  /// Membangun tombol primary
   Widget _buildPrimaryButton({
     required String label,
     required IconData icon,
@@ -840,6 +899,7 @@ class _OnboardingScreenState extends State<OnboardingScreen>
     );
   }
 
+  /// Membangun tombol secondary
   Widget _buildSecondaryButton({
     required String label,
     required IconData icon,

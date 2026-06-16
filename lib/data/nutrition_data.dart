@@ -3,10 +3,16 @@ import 'dart:convert';
 import 'package:flutter/services.dart';
 import 'package:flutter/material.dart';
 
+/// Manajer data nutrisi untuk semua makanan.
+/// Memuat data dari file JSON dan menyediakan akses ke informasi nutrisi setiap makanan.
 class NutritionData {
+  // Database makanan utama
   static late Map<String, FoodData> _foodDatabase;
+  
+  // Flag untuk menandakan apakah data sudah dimuat
   static bool _isInitialized = false;
 
+  /// Memuat data nutrisi dari file JSON
   static Future<void> loadData() async {
     if (_isInitialized) return;
     
@@ -17,10 +23,12 @@ class NutritionData {
       final List<dynamic> foods = jsonData['foods'];
       _foodDatabase = {};
       
+      // Iterasi setiap makanan dan konversi ke FoodData
       for (var food in foods) {
         final label = food['label'] as String;
         final healthLevelStr = food['health_level'] as String;
         
+        // Konversi string health_level ke enum
         HealthLevel healthLevel;
         switch (healthLevelStr) {
           case 'healthy':
@@ -48,7 +56,7 @@ class NutritionData {
         );
       }
       
-      // Tambahkan default
+      // Tambahkan data default untuk fallback
       _foodDatabase['default'] = FoodData(
         indonesianName: 'Makanan',
         calories: 200,
@@ -72,6 +80,7 @@ class NutritionData {
     }
   }
   
+  /// Memuat data default jika file JSON gagal dimuat
   static void _loadDefaultData() {
     _foodDatabase = {};
     _foodDatabase['default'] = FoodData(
@@ -90,6 +99,7 @@ class NutritionData {
     _isInitialized = true;
   }
   
+  /// Mendapatkan data makanan berdasarkan label
   static FoodData getFoodData(String label) {
     if (!_isInitialized) {
       // Fallback jika belum load
@@ -98,42 +108,56 @@ class NutritionData {
     return _foodDatabase[label] ?? _foodDatabase['default']!;
   }
   
+  // ==================== GETTER METHODS ====================
+  
+  /// Mendapatkan nama Indonesia dari makanan
   static String getIndonesianName(String label) {
     return getFoodData(label).indonesianName;
   }
   
+  /// Mendapatkan kalori makanan
   static int getCalories(String label) {
     return getFoodData(label).calories;
   }
   
+  /// Mendapatkan protein makanan
   static double getProtein(String label) {
     return getFoodData(label).protein;
   }
   
+  /// Mendapatkan karbohidrat makanan
   static double getCarbs(String label) {
     return getFoodData(label).carbs;
   }
   
+  /// Mendapatkan lemak makanan
   static double getFat(String label) {
     return getFoodData(label).fat;
   }
   
+  /// Mendapatkan serat makanan
   static double getFiber(String label) {
     return getFoodData(label).fiber;
   }
   
+  /// Mendapatkan gula makanan
   static double getSugar(String label) {
     return getFoodData(label).sugar;
   }
   
+  /// Mendapatkan sodium makanan
   static double getSodium(String label) {
     return getFoodData(label).sodium;
   }
   
+  /// Mendapatkan level kesehatan makanan
   static HealthLevel getHealthLevel(String label) {
     return getFoodData(label).healthLevel;
   }
   
+  // ==================== UI HELPER METHODS ====================
+  
+  /// Mendapatkan warna berdasarkan level kesehatan
   static Color getHealthColor(HealthLevel level) {
     switch (level) {
       case HealthLevel.healthy:
@@ -145,6 +169,7 @@ class NutritionData {
     }
   }
   
+  /// Mendapatkan icon berdasarkan level kesehatan
   static IconData getHealthIcon(HealthLevel level) {
     switch (level) {
       case HealthLevel.healthy:
@@ -156,6 +181,7 @@ class NutritionData {
     }
   }
   
+  /// Mendapatkan teks berdasarkan level kesehatan
   static String getHealthText(HealthLevel level) {
     switch (level) {
       case HealthLevel.healthy:
@@ -167,17 +193,21 @@ class NutritionData {
     }
   }
   
+  /// Mendapatkan tip kesehatan untuk makanan
   static String getHealthTip(String label) {
     return getFoodData(label).healthTip;
   }
   
+  /// Mendapatkan peringatan untuk makanan
   static String getWarning(String label) {
     return getFoodData(label).warning;
   }
 }
 
+/// Enum untuk level kesehatan makanan
 enum HealthLevel { healthy, medium, unhealthy }
 
+/// Model data untuk informasi nutrisi makanan
 class FoodData {
   final String indonesianName;
   final int calories;

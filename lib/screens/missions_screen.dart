@@ -1,12 +1,12 @@
 // lib/screens/missions_screen.dart
-// SPDX-License-Identifier: Apache-2.0
-
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../providers/app_state.dart';
 import '../utils/app_colors.dart';
 import '../utils/text_style_helper.dart';
 
+/// Halaman misi dan tantangan harian
+/// Menampilkan daftar misi harian, progress, dan pencapaian (badges)
 class MissionsScreen extends StatefulWidget {
   const MissionsScreen({super.key});
 
@@ -15,7 +15,10 @@ class MissionsScreen extends StatefulWidget {
 }
 
 class _MissionsScreenState extends State<MissionsScreen> with SingleTickerProviderStateMixin {
+  // Tab controller untuk switch antara "Misi Hari Ini" dan "Pencapaian"
   late TabController _tabController;
+  
+  // Flag untuk mencegah multiple claim
   bool _isClaiming = false;
 
   @override
@@ -23,6 +26,7 @@ class _MissionsScreenState extends State<MissionsScreen> with SingleTickerProvid
     super.initState();
     _tabController = TabController(length: 2, vsync: this);
     
+    // Refresh data misi setelah build selesai
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final appState = Provider.of<AppState>(context, listen: false);
       appState.refreshMissionData();
@@ -58,10 +62,9 @@ class _MissionsScreenState extends State<MissionsScreen> with SingleTickerProvid
     );
   }
 
-  // ============================================================
-  // APP BAR
-  // ============================================================
+  // ==================== APP BAR ====================
   
+  /// Membangun app bar dengan judul dan deskripsi
   Widget _buildAppBar() {
     return Container(
       decoration: BoxDecoration(
@@ -118,10 +121,9 @@ class _MissionsScreenState extends State<MissionsScreen> with SingleTickerProvid
     );
   }
 
-  // ============================================================
-  // STATS HEADER
-  // ============================================================
+  // ==================== STATS HEADER ====================
   
+  /// Membangun header statistik (poin, streak, badges)
   Widget _buildStatsHeader() {
     return Consumer<AppState>(
       builder: (context, appState, child) {
@@ -155,6 +157,7 @@ class _MissionsScreenState extends State<MissionsScreen> with SingleTickerProvid
           ),
           child: Column(
             children: [
+              // Row 1: Poin, Streak, Badges
               Row(
                 children: [
                   _buildStatCard(
@@ -183,6 +186,7 @@ class _MissionsScreenState extends State<MissionsScreen> with SingleTickerProvid
                 ],
               ),
               const SizedBox(height: 14),
+              // Row 2: Misi Selesai, Progress Minggu
               Row(
                 children: [
                   _buildStatCardSmall(
@@ -209,6 +213,7 @@ class _MissionsScreenState extends State<MissionsScreen> with SingleTickerProvid
     );
   }
 
+  /// Membangun card statistik utama
   Widget _buildStatCard({
     required IconData icon,
     required String value,
@@ -269,6 +274,7 @@ class _MissionsScreenState extends State<MissionsScreen> with SingleTickerProvid
     );
   }
 
+  /// Membangun card statistik kecil
   Widget _buildStatCardSmall({
     required IconData icon,
     required String value,
@@ -321,16 +327,16 @@ class _MissionsScreenState extends State<MissionsScreen> with SingleTickerProvid
     );
   }
 
+  /// Menghitung progress mingguan dari total misi yang selesai
   int _calculateWeeklyProgressFromTotal(int totalMissionsCompleted) {
     const weeklyTarget = 20;
     int progress = ((totalMissionsCompleted / weeklyTarget) * 100).toInt();
     return progress.clamp(0, 100);
   }
 
-  // ============================================================
-  // TAB BAR
-  // ============================================================
+  // ==================== TAB BAR ====================
   
+  /// Membangun tab bar untuk switch antara misi dan pencapaian
   Widget _buildTabBar() {
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 20),
@@ -366,13 +372,13 @@ class _MissionsScreenState extends State<MissionsScreen> with SingleTickerProvid
     );
   }
 
-  // ============================================================
-  // DAILY MISSIONS TAB
-  // ============================================================
+  // ==================== DAILY MISSIONS TAB ====================
   
+  /// Membangun tab daftar misi harian
   Widget _buildDailyMissionsTab() {
     return Consumer<AppState>(
       builder: (context, appState, child) {
+        // Tampilkan loading
         if (appState.isMissionLoading) {
           return const Center(
             child: Column(
@@ -388,6 +394,7 @@ class _MissionsScreenState extends State<MissionsScreen> with SingleTickerProvid
         
         final missions = appState.dailyMissions;
         
+        // Tampilkan state kosong
         if (missions.isEmpty) {
           return RefreshIndicator(
             onRefresh: () => appState.refreshMissionData(),
@@ -420,6 +427,7 @@ class _MissionsScreenState extends State<MissionsScreen> with SingleTickerProvid
           );
         }
         
+        // Tampilkan daftar misi
         return RefreshIndicator(
           onRefresh: () => appState.refreshMissionData(),
           color: AppColors.primary,
@@ -437,6 +445,7 @@ class _MissionsScreenState extends State<MissionsScreen> with SingleTickerProvid
     );
   }
 
+  /// Membangun state ketika semua misi selesai
   Widget _buildAllMissionsCompletedState() {
     return Center(
       child: Column(
@@ -461,7 +470,7 @@ class _MissionsScreenState extends State<MissionsScreen> with SingleTickerProvid
           ),
           const SizedBox(height: 20),
           Text(
-            'Semua Misi Selesai! 🎉',
+            'Semua Misi Selesai!',
             style: TextStyleHelper.titleMedium.copyWith(
               color: AppColors.primaryLight,
               fontWeight: FontWeight.bold,
@@ -482,6 +491,7 @@ class _MissionsScreenState extends State<MissionsScreen> with SingleTickerProvid
     );
   }
 
+  /// Membangun card misi individual
   Widget _buildMissionCard(Map<String, dynamic> mission, int index, AppState appState) {
     final status = mission['status'] as String;
     final currentValue = mission['current_value'] as int? ?? 0;
@@ -514,149 +524,19 @@ class _MissionsScreenState extends State<MissionsScreen> with SingleTickerProvid
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Row(
-                  children: [
-                    Container(
-                      width: 52,
-                      height: 52,
-                      decoration: BoxDecoration(
-                        gradient: LinearGradient(
-                          begin: Alignment.topLeft,
-                          end: Alignment.bottomRight,
-                          colors: [
-                            _getMissionColor(mission['name']),
-                            _getMissionColor(mission['name']).withValues(alpha: 0.7),
-                          ],
-                        ),
-                        borderRadius: BorderRadius.circular(16),
-                      ),
-                      child: Icon(
-                        _getMissionIcon(mission['name']),
-                        color: Colors.white,
-                        size: 28,
-                      ),
-                    ),
-                    const SizedBox(width: 16),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            mission['name'] as String,
-                            style: TextStyleHelper.titleMedium.copyWith(
-                              color: isCompleted && !isClaimed
-                                  ? Colors.white
-                                  : AppColors.textDark,
-                            ),
-                          ),
-                          const SizedBox(height: 6),
-                          _buildDifficultyBadge(mission['difficulty'] as String),
-                        ],
-                      ),
-                    ),
-                    if (!isClaimed)
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                        decoration: BoxDecoration(
-                          gradient: isCompleted
-                              ? LinearGradient(
-                                  colors: [Colors.white, Colors.white.withValues(alpha: 0.9)],
-                                )
-                              : LinearGradient(
-                                  colors: [AppColors.accent, AppColors.accentDark],
-                                ),
-                          borderRadius: BorderRadius.circular(30),
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(
-                              Icons.star,
-                              size: 14,
-                              color: isCompleted
-                                  ? AppColors.accent
-                                  : Colors.white,
-                            ),
-                            const SizedBox(width: 6),
-                            Text(
-                              '+$rewardPoints',
-                              style: TextStyleHelper.labelSmall.copyWith(
-                                fontWeight: FontWeight.w700,
-                                color: isCompleted
-                                    ? AppColors.accent
-                                    : Colors.white,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                  ],
-                ),
+                // Header: Icon, Nama, Reward
+                _buildMissionHeader(mission, isCompleted, isClaimed, rewardPoints),
                 const SizedBox(height: 14),
                 
-                Text(
-                  mission['description'] as String,
-                  style: TextStyleHelper.bodySmall.copyWith(
-                    color: isCompleted && !isClaimed
-                        ? Colors.white.withValues(alpha: 0.9)
-                        : AppColors.textMedium,
-                    height: 1.4,
-                  ),
-                ),
+                // Deskripsi
+                _buildMissionDescription(mission, isCompleted),
                 const SizedBox(height: 14),
                 
-                if (!isClaimed) ...[
-                  Row(
-                    children: [
-                      Expanded(
-                        child: ClipRRect(
-                          borderRadius: BorderRadius.circular(12),
-                          child: LinearProgressIndicator(
-                            value: progress,
-                            backgroundColor: isCompleted && !isClaimed
-                                ? Colors.white.withValues(alpha: 0.3)
-                                : AppColors.divider,
-                            color: isCompleted && !isClaimed
-                                ? Colors.white
-                                : _getMissionColor(mission['name']),
-                            minHeight: 8,
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 14),
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                        decoration: BoxDecoration(
-                          color: isCompleted && !isClaimed
-                              ? Colors.white.withValues(alpha: 0.2)
-                              : _getMissionColor(mission['name']).withValues(alpha: 0.1),
-                          borderRadius: BorderRadius.circular(20),
-                        ),
-                        child: Text(
-                          '$currentValue/$targetCount',
-                          style: TextStyleHelper.labelSmall.copyWith(
-                            fontWeight: FontWeight.w700,
-                            color: isCompleted && !isClaimed
-                                ? Colors.white
-                                : _getMissionColor(mission['name']),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 10),
-                ],
+                // Progress bar atau status
+                _buildMissionProgress(mission, isCompleted, isClaimed, currentValue, targetCount, progress),
                 
-                if (isClaimed)
-                  _buildStatusRow(Icons.check_circle_rounded, 'Sudah diklaim', Colors.grey),
-                if (isCompleted && !isClaimed)
-                  _buildClaimButton(mission['name'] as String, () {
-                    _handleClaimMission(context, missionProgressId, mission, appState);
-                  }),
-                if (!isCompleted && !isClaimed && progress > 0)
-                  _buildStatusRow(Icons.trending_up_rounded, 'Sedang berlangsung...', AppColors.info),
-                if (!isCompleted && !isClaimed && progress == 0)
-                  _buildStatusRow(Icons.access_time_rounded, 'Belum dimulai', AppColors.textLight),
+                // Status row atau claim button
+                _buildMissionFooter(mission, isCompleted, isClaimed, progress, missionProgressId, appState),
               ],
             ),
           ),
@@ -665,6 +545,186 @@ class _MissionsScreenState extends State<MissionsScreen> with SingleTickerProvid
     );
   }
 
+  /// Membangun header misi (icon, nama, reward)
+  Widget _buildMissionHeader(Map<String, dynamic> mission, bool isCompleted, bool isClaimed, int rewardPoints) {
+    return Row(
+      children: [
+        Container(
+          width: 52,
+          height: 52,
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [
+                _getMissionColor(mission['name']),
+                _getMissionColor(mission['name']).withValues(alpha: 0.7),
+              ],
+            ),
+            borderRadius: BorderRadius.circular(16),
+          ),
+          child: Icon(
+            _getMissionIcon(mission['name']),
+            color: Colors.white,
+            size: 28,
+          ),
+        ),
+        const SizedBox(width: 16),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                mission['name'] as String,
+                style: TextStyleHelper.titleMedium.copyWith(
+                  color: isCompleted && !isClaimed
+                      ? Colors.white
+                      : AppColors.textDark,
+                ),
+              ),
+              const SizedBox(height: 6),
+              _buildDifficultyBadge(mission['difficulty'] as String),
+            ],
+          ),
+        ),
+        if (!isClaimed)
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+            decoration: BoxDecoration(
+              gradient: isCompleted
+                  ? LinearGradient(
+                      colors: [Colors.white, Colors.white.withValues(alpha: 0.9)],
+                    )
+                  : LinearGradient(
+                      colors: [AppColors.accent, AppColors.accentDark],
+                    ),
+              borderRadius: BorderRadius.circular(30),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  Icons.star,
+                  size: 14,
+                  color: isCompleted
+                      ? AppColors.accent
+                      : Colors.white,
+                ),
+                const SizedBox(width: 6),
+                Text(
+                  '+$rewardPoints',
+                  style: TextStyleHelper.labelSmall.copyWith(
+                    fontWeight: FontWeight.w700,
+                    color: isCompleted
+                        ? AppColors.accent
+                        : Colors.white,
+                  ),
+                ),
+              ],
+            ),
+          ),
+      ],
+    );
+  }
+
+  /// Membangun deskripsi misi
+  Widget _buildMissionDescription(Map<String, dynamic> mission, bool isCompleted) {
+    return Text(
+      mission['description'] as String,
+      style: TextStyleHelper.bodySmall.copyWith(
+        color: isCompleted
+            ? Colors.white.withValues(alpha: 0.9)
+            : AppColors.textMedium,
+        height: 1.4,
+      ),
+    );
+  }
+
+  /// Membangun progress bar atau status progress
+  Widget _buildMissionProgress(
+    Map<String, dynamic> mission,
+    bool isCompleted,
+    bool isClaimed,
+    int currentValue,
+    int targetCount,
+    double progress,
+  ) {
+    if (isClaimed) return const SizedBox.shrink();
+    
+    return Column(
+      children: [
+        Row(
+          children: [
+            Expanded(
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(12),
+                child: LinearProgressIndicator(
+                  value: progress,
+                  backgroundColor: isCompleted
+                      ? Colors.white.withValues(alpha: 0.3)
+                      : AppColors.divider,
+                  color: isCompleted
+                      ? Colors.white
+                      : _getMissionColor(mission['name']),
+                  minHeight: 8,
+                ),
+              ),
+            ),
+            const SizedBox(width: 14),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+              decoration: BoxDecoration(
+                color: isCompleted
+                    ? Colors.white.withValues(alpha: 0.2)
+                    : _getMissionColor(mission['name']).withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(20),
+              ),
+              child: Text(
+                '$currentValue/$targetCount',
+                style: TextStyleHelper.labelSmall.copyWith(
+                  fontWeight: FontWeight.w700,
+                  color: isCompleted
+                      ? Colors.white
+                      : _getMissionColor(mission['name']),
+                ),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 10),
+      ],
+    );
+  }
+
+  /// Membangun footer misi (status atau tombol claim)
+  Widget _buildMissionFooter(
+    Map<String, dynamic> mission,
+    bool isCompleted,
+    bool isClaimed,
+    double progress,
+    int missionProgressId,
+    AppState appState,
+  ) {
+    if (isClaimed) {
+      return _buildStatusRow(Icons.check_circle_rounded, 'Sudah diklaim', Colors.grey);
+    }
+    
+    if (isCompleted) {
+      return _buildClaimButton(mission['name'] as String, () {
+        _handleClaimMission(context, missionProgressId, mission, appState);
+      });
+    }
+    
+    if (progress > 0) {
+      return _buildStatusRow(Icons.trending_up_rounded, 'Sedang berlangsung...', AppColors.info);
+    }
+    
+    return _buildStatusRow(Icons.access_time_rounded, 'Belum dimulai', AppColors.textLight);
+  }
+
+  // ==================== MISSION UI COMPONENTS ====================
+  
+  /// Membangun badge tingkat kesulitan
   Widget _buildDifficultyBadge(String difficulty) {
     Map<String, dynamic> style;
     
@@ -705,6 +765,7 @@ class _MissionsScreenState extends State<MissionsScreen> with SingleTickerProvid
     );
   }
 
+  /// Membangun row status dengan icon
   Widget _buildStatusRow(IconData icon, String text, Color color) {
     return Container(
       padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
@@ -725,6 +786,7 @@ class _MissionsScreenState extends State<MissionsScreen> with SingleTickerProvid
     );
   }
 
+  /// Membangun tombol klaim hadiah
   Widget _buildClaimButton(String missionName, VoidCallback onPressed) {
     return SizedBox(
       width: double.infinity,
@@ -762,15 +824,15 @@ class _MissionsScreenState extends State<MissionsScreen> with SingleTickerProvid
     );
   }
 
-  // ============================================================
-  // ACHIEVEMENTS TAB (Badges)
-  // ============================================================
+  // ==================== ACHIEVEMENTS TAB ====================
   
+  /// Membangun tab pencapaian (badges)
   Widget _buildAchievementsTab() {
     return Consumer<AppState>(
       builder: (context, appState, child) {
         final badges = appState.badges;
         
+        // Tampilkan state kosong
         if (badges.isEmpty) {
           return Center(
             child: Column(
@@ -804,6 +866,7 @@ class _MissionsScreenState extends State<MissionsScreen> with SingleTickerProvid
           );
         }
         
+        // Tampilkan grid badges
         return GridView.builder(
           padding: const EdgeInsets.all(16),
           gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
@@ -822,35 +885,17 @@ class _MissionsScreenState extends State<MissionsScreen> with SingleTickerProvid
     );
   }
 
+  /// Membangun card badge dengan desain advanced
   Widget _buildBadgeCardAdvanced(Map<String, dynamic> badge) {
     final badgeName = badge['badge_name'] as String;
     final earnedDate = badge['earned_date'] as String;
     final formattedDate = _formatDate(earnedDate);
     
-    Color getBadgeGradientStart(String name) {
-      if (name.contains('Sayur') || name.contains('Serat')) return const Color(0xFF4CAF50);
-      if (name.contains('Protein')) return const Color(0xFF2196F3);
-      if (name.contains('Kalori')) return const Color(0xFFFF9800);
-      if (name.contains('Sodium')) return const Color(0xFF9C27B0);
-      if (name.contains('Gula')) return const Color(0xFFE91E63);
-      if (name.contains('Konsisten') || name.contains('Streak')) return const Color(0xFFF44336);
-      if (name.contains('Explorer')) return const Color(0xFF00BCD4);
-      if (name.contains('Master')) return const Color(0xFF673AB7);
-      return AppColors.primary;
-    }
+    // Tentukan warna gradient berdasarkan nama badge
+    final gradientStart = _getBadgeGradientStart(badgeName);
+    final gradientEnd = _getBadgeGradientEnd(badgeName);
     
-    Color getBadgeGradientEnd(String name) {
-      if (name.contains('Sayur') || name.contains('Serat')) return const Color(0xFF2E7D32);
-      if (name.contains('Protein')) return const Color(0xFF1565C0);
-      if (name.contains('Kalori')) return const Color(0xFFF57C00);
-      if (name.contains('Sodium')) return const Color(0xFF6A1B9A);
-      if (name.contains('Gula')) return const Color(0xFFC2185B);
-      if (name.contains('Konsisten') || name.contains('Streak')) return const Color(0xFFD32F2F);
-      if (name.contains('Explorer')) return const Color(0xFF00838F);
-      if (name.contains('Master')) return const Color(0xFF4527A0);
-      return AppColors.primaryDark;
-    }
-    
+    // Cek apakah badge langka
     bool isRare = badgeName.contains('Master') || 
                   badgeName.contains('Explorer') || 
                   badgeName.contains('Perfect') ||
@@ -863,15 +908,12 @@ class _MissionsScreenState extends State<MissionsScreen> with SingleTickerProvid
           gradient: LinearGradient(
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
-            colors: [
-              getBadgeGradientStart(badgeName),
-              getBadgeGradientEnd(badgeName),
-            ],
+            colors: [gradientStart, gradientEnd],
           ),
           borderRadius: BorderRadius.circular(24),
           boxShadow: [
             BoxShadow(
-              color: getBadgeGradientStart(badgeName).withValues(alpha: 0.4),
+              color: gradientStart.withValues(alpha: 0.4),
               blurRadius: 16,
               offset: const Offset(0, 6),
             ),
@@ -879,6 +921,7 @@ class _MissionsScreenState extends State<MissionsScreen> with SingleTickerProvid
         ),
         child: Stack(
           children: [
+            // Dekorasi latar belakang
             Positioned(
               top: -10,
               right: -10,
@@ -903,6 +946,7 @@ class _MissionsScreenState extends State<MissionsScreen> with SingleTickerProvid
                 ),
               ),
             ),
+            // Konten badge
             Padding(
               padding: const EdgeInsets.all(16),
               child: Column(
@@ -924,7 +968,7 @@ class _MissionsScreenState extends State<MissionsScreen> with SingleTickerProvid
                     ),
                     child: Icon(
                       _getBadgeIcon(badgeName),
-                      color: getBadgeGradientStart(badgeName),
+                      color: gradientStart,
                       size: 38,
                     ),
                   ),
@@ -965,6 +1009,7 @@ class _MissionsScreenState extends State<MissionsScreen> with SingleTickerProvid
                 ],
               ),
             ),
+            // Badge "LANGKA" untuk badge langka
             if (isRare)
               Positioned(
                 top: 8,
@@ -994,11 +1039,15 @@ class _MissionsScreenState extends State<MissionsScreen> with SingleTickerProvid
     );
   }
 
-  // ============================================================
-  // CLAIM HANDLER
-  // ============================================================
+  // ==================== CLAIM HANDLER ====================
   
-  Future<void> _handleClaimMission(BuildContext context, int missionProgressId, Map<String, dynamic> mission, AppState appState) async {
+  /// Handler untuk mengklaim hadiah misi
+  Future<void> _handleClaimMission(
+    BuildContext context,
+    int missionProgressId,
+    Map<String, dynamic> mission,
+    AppState appState,
+  ) async {
     if (_isClaiming) return;
     
     setState(() {
@@ -1008,6 +1057,7 @@ class _MissionsScreenState extends State<MissionsScreen> with SingleTickerProvid
     final rewardPoints = mission['reward_points'] as int;
     final badgeName = mission['badge_name'] as String?;
     
+    // Tampilkan dialog loading
     showDialog(
       context: context,
       barrierDismissible: false,
@@ -1037,142 +1087,24 @@ class _MissionsScreenState extends State<MissionsScreen> with SingleTickerProvid
     try {
       final success = await appState.claimMissionReward(missionProgressId);
       
+      // Tutup dialog loading
       if (context.mounted) {
         Navigator.pop(context);
       }
       
+      // Tampilkan dialog sukses atau error
       if (context.mounted) {
         if (success) {
-          await showDialog(
-            context: context,
-            barrierDismissible: false,
-            builder: (successContext) => AlertDialog(
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
-              title: Column(
-                children: [
-                  Container(
-                    width: 60,
-                    height: 60,
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        colors: [AppColors.success, AppColors.carbs],
-                      ),
-                      shape: BoxShape.circle,
-                    ),
-                    child: const Icon(Icons.check_rounded, color: Colors.white, size: 32),
-                  ),
-                  const SizedBox(height: 16),
-                  Text(
-                    '🎉 Selamat! 🎉',
-                    style: TextStyleHelper.headline4.copyWith(color: AppColors.success),
-                  ),
-                ],
-              ),
-              content: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(
-                    'Anda telah menyelesaikan misi',
-                    style: TextStyleHelper.bodyMedium,
-                    textAlign: TextAlign.center,
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    mission['name'] as String,
-                    style: TextStyleHelper.titleMedium.copyWith(color: AppColors.primary),
-                    textAlign: TextAlign.center,
-                  ),
-                  const SizedBox(height: 16),
-                  Container(
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        colors: [AppColors.accent, AppColors.accentDark],
-                      ),
-                      borderRadius: BorderRadius.circular(20),
-                    ),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        const Icon(Icons.star, color: Colors.white),
-                        const SizedBox(width: 8),
-                        Text(
-                          '+$rewardPoints Poin',
-                          style: TextStyleHelper.titleMedium.copyWith(color: Colors.white),
-                        ),
-                      ],
-                    ),
-                  ),
-                  if (badgeName != null && badgeName.isNotEmpty) ...[
-                    const SizedBox(height: 12),
-                    Container(
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        color: AppColors.warning.withValues(alpha: 0.1),
-                        borderRadius: BorderRadius.circular(16),
-                        border: Border.all(color: AppColors.warning.withValues(alpha: 0.3)),
-                      ),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          const Icon(Icons.workspace_premium, color: AppColors.warning),
-                          const SizedBox(width: 8),
-                          Text(
-                            'pencapaian: $badgeName',
-                            style: TextStyleHelper.titleMedium.copyWith(color: AppColors.warning),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ],
-              ),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.pop(successContext),
-                  child: Text('Lihat pencapaian', style: TextStyleHelper.labelMedium.copyWith(color: AppColors.primary)),
-                ),
-                ElevatedButton(
-                  onPressed: () => Navigator.pop(successContext),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: AppColors.accent,
-                    foregroundColor: Colors.white,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                  ),
-                  child: const Text('Tutup'),
-                ),
-              ],
-            ),
-          );
-          
+          await _showClaimSuccessDialog(context, mission, rewardPoints, badgeName);
           await appState.refreshMissionData();
-          
         } else {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Row(
-                children: [
-                  Icon(Icons.error_outline, color: Colors.white),
-                  SizedBox(width: 8),
-                  Text('Gagal mengklaim hadiah, coba lagi'),
-                ],
-              ),
-              backgroundColor: AppColors.error,
-              behavior: SnackBarBehavior.floating,
-            ),
-          );
+          _showClaimErrorSnackbar(context, 'Gagal mengklaim hadiah, coba lagi');
         }
       }
     } catch (e) {
       if (context.mounted) {
         Navigator.pop(context);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error: $e'),
-            backgroundColor: AppColors.error,
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
+        _showClaimErrorSnackbar(context, 'Error: $e');
       }
     } finally {
       if (mounted) {
@@ -1183,10 +1115,136 @@ class _MissionsScreenState extends State<MissionsScreen> with SingleTickerProvid
     }
   }
 
-  // ============================================================
-  // HELPER METHODS
-  // ============================================================
+  /// Menampilkan dialog sukses klaim hadiah
+  Future<void> _showClaimSuccessDialog(
+    BuildContext context,
+    Map<String, dynamic> mission,
+    int rewardPoints,
+    String? badgeName,
+  ) async {
+    await showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (successContext) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
+        title: Column(
+          children: [
+            Container(
+              width: 60,
+              height: 60,
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [AppColors.success, AppColors.carbs],
+                ),
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(Icons.check_rounded, color: Colors.white, size: 32),
+            ),
+            const SizedBox(height: 16),
+            Text(
+              'Selamat!',
+              style: TextStyleHelper.headline4.copyWith(color: AppColors.success),
+            ),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              'Anda telah menyelesaikan misi',
+              style: TextStyleHelper.bodyMedium,
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 8),
+            Text(
+              mission['name'] as String,
+              style: TextStyleHelper.titleMedium.copyWith(color: AppColors.primary),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 16),
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [AppColors.accent, AppColors.accentDark],
+                ),
+                borderRadius: BorderRadius.circular(20),
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const Icon(Icons.star, color: Colors.white),
+                  const SizedBox(width: 8),
+                  Text(
+                    '+$rewardPoints Poin',
+                    style: TextStyleHelper.titleMedium.copyWith(color: Colors.white),
+                  ),
+                ],
+              ),
+            ),
+            if (badgeName != null && badgeName.isNotEmpty) ...[
+              const SizedBox(height: 12),
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: AppColors.warning.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: AppColors.warning.withValues(alpha: 0.3)),
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    const Icon(Icons.workspace_premium, color: AppColors.warning),
+                    const SizedBox(width: 8),
+                    Text(
+                      'pencapaian: $badgeName',
+                      style: TextStyleHelper.titleMedium.copyWith(color: AppColors.warning),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(successContext),
+            child: Text('Lihat pencapaian', style: TextStyleHelper.labelMedium.copyWith(color: AppColors.primary)),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(successContext),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.accent,
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            ),
+            child: const Text('Tutup'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Menampilkan snackbar error klaim hadiah
+  void _showClaimErrorSnackbar(BuildContext context, String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Row(
+          children: [
+            const Icon(Icons.error_outline, color: Colors.white),
+            const SizedBox(width: 8),
+            Text(message),
+          ],
+        ),
+        backgroundColor: AppColors.error,
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
+  }
+
+  // ==================== HELPER METHODS ====================
   
+  /// Memformat tanggal menjadi teks yang mudah dibaca
   String _formatDate(String dateString) {
     try {
       final date = DateTime.parse(dateString);
@@ -1207,6 +1265,7 @@ class _MissionsScreenState extends State<MissionsScreen> with SingleTickerProvid
     }
   }
   
+  /// Mendapatkan nama bulan
   String _getMonthName(int month) {
     const months = [
       'Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun',
@@ -1215,6 +1274,7 @@ class _MissionsScreenState extends State<MissionsScreen> with SingleTickerProvid
     return months[month - 1];
   }
   
+  /// Mendapatkan icon berdasarkan nama misi
   IconData _getMissionIcon(String missionName) {
     if (missionName.contains('Sayur') || missionName.contains('Serat') || missionName.contains('Fiber')) {
       return Icons.eco_rounded;
@@ -1242,6 +1302,7 @@ class _MissionsScreenState extends State<MissionsScreen> with SingleTickerProvid
     return Icons.emoji_events_rounded;
   }
   
+  /// Mendapatkan warna berdasarkan nama misi
   Color _getMissionColor(String missionName) {
     if (missionName.contains('Sayur') || missionName.contains('Serat') || missionName.contains('Fiber')) {
       return AppColors.fiber;
@@ -1269,6 +1330,33 @@ class _MissionsScreenState extends State<MissionsScreen> with SingleTickerProvid
     return AppColors.primary;
   }
   
+  /// Mendapatkan warna gradient start berdasarkan nama badge
+  Color _getBadgeGradientStart(String name) {
+    if (name.contains('Sayur') || name.contains('Serat')) return const Color(0xFF4CAF50);
+    if (name.contains('Protein')) return const Color(0xFF2196F3);
+    if (name.contains('Kalori')) return const Color(0xFFFF9800);
+    if (name.contains('Sodium')) return const Color(0xFF9C27B0);
+    if (name.contains('Gula')) return const Color(0xFFE91E63);
+    if (name.contains('Konsisten') || name.contains('Streak')) return const Color(0xFFF44336);
+    if (name.contains('Explorer')) return const Color(0xFF00BCD4);
+    if (name.contains('Master')) return const Color(0xFF673AB7);
+    return AppColors.primary;
+  }
+  
+  /// Mendapatkan warna gradient end berdasarkan nama badge
+  Color _getBadgeGradientEnd(String name) {
+    if (name.contains('Sayur') || name.contains('Serat')) return const Color(0xFF2E7D32);
+    if (name.contains('Protein')) return const Color(0xFF1565C0);
+    if (name.contains('Kalori')) return const Color(0xFFF57C00);
+    if (name.contains('Sodium')) return const Color(0xFF6A1B9A);
+    if (name.contains('Gula')) return const Color(0xFFC2185B);
+    if (name.contains('Konsisten') || name.contains('Streak')) return const Color(0xFFD32F2F);
+    if (name.contains('Explorer')) return const Color(0xFF00838F);
+    if (name.contains('Master')) return const Color(0xFF4527A0);
+    return AppColors.primaryDark;
+  }
+  
+  /// Mendapatkan icon berdasarkan nama badge
   IconData _getBadgeIcon(String badgeName) {
     if (badgeName.contains('Sayur') || badgeName.contains('Serat')) {
       return Icons.eco_rounded;

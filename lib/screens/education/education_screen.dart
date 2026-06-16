@@ -1,6 +1,4 @@
 // lib/screens/education_screen.dart
-// SPDX-License-Identifier: Apache-2.0
-
 import 'package:flutter/material.dart';
 import '../../utils/app_colors.dart';
 import '../../utils/text_style_helper.dart';
@@ -8,6 +6,7 @@ import '../../models/education_model.dart';
 import '../../services/education_service.dart';
 import 'education_detail_screen.dart';
 
+/// Halaman utama edukasi dengan daftar artikel, pencarian, dan filter kategori
 class EducationScreen extends StatefulWidget {
   const EducationScreen({super.key});
 
@@ -30,6 +29,7 @@ class _EducationScreenState extends State<EducationScreen> {
     _loadData();
   }
 
+  /// Memuat data edukasi dari service
   Future<void> _loadData() async {
     setState(() => _isLoading = true);
     
@@ -42,6 +42,7 @@ class _EducationScreenState extends State<EducationScreen> {
     });
   }
 
+  /// Mendapatkan daftar artikel yang sudah difilter berdasarkan kategori dan pencarian
   List<EducationArticle> get _filteredArticles {
     List<EducationArticle> result = _selectedCategory == 'Semua'
         ? _articles
@@ -80,6 +81,9 @@ class _EducationScreenState extends State<EducationScreen> {
     );
   }
 
+  // ==================== APP BAR ====================
+  
+  /// Membangun app bar dengan judul dan jumlah artikel
   Widget _buildAppBar(int totalCount, bool isLoading) {
     return Container(
       color: AppColors.primaryDark,
@@ -127,6 +131,9 @@ class _EducationScreenState extends State<EducationScreen> {
     );
   }
 
+  // ==================== SEARCH BAR ====================
+  
+  /// Membangun search bar untuk mencari artikel
   Widget _buildSearchBar(bool isDark) {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
@@ -177,6 +184,9 @@ class _EducationScreenState extends State<EducationScreen> {
     );
   }
 
+  // ==================== CATEGORY FILTER ====================
+  
+  /// Membangun filter kategori (chip)
   Widget _buildCategoryFilter(bool isDark) {
     final categories = [
       {'name': 'Semua', 'count': _articles.length},
@@ -223,12 +233,16 @@ class _EducationScreenState extends State<EducationScreen> {
     );
   }
 
+  // ==================== STATE WIDGETS ====================
+  
+  /// Membangun tampilan loading
   Widget _buildLoadingState() {
     return const Center(
       child: CircularProgressIndicator(color: AppColors.primary),
     );
   }
 
+  /// Membangun tampilan kosong (tidak ada artikel)
   Widget _buildEmptyState() {
     return Center(
       child: Column(
@@ -269,6 +283,9 @@ class _EducationScreenState extends State<EducationScreen> {
     );
   }
 
+  // ==================== ARTICLE LIST ====================
+  
+  /// Membangun daftar artikel
   Widget _buildArticleList() {
     return ListView.builder(
       padding: const EdgeInsets.all(16),
@@ -280,6 +297,7 @@ class _EducationScreenState extends State<EducationScreen> {
     );
   }
 
+  /// Membangun card artikel individual
   Widget _buildArticleCard(EducationArticle article) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final hasImage = article.imageAsset != null && article.imageAsset!.isNotEmpty;
@@ -312,6 +330,7 @@ class _EducationScreenState extends State<EducationScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              // Gambar artikel (jika ada)
               if (hasImage)
                 ClipRRect(
                   borderRadius: const BorderRadius.only(
@@ -325,11 +344,13 @@ class _EducationScreenState extends State<EducationScreen> {
                     fit: BoxFit.cover,
                   ),
                 ),
+              // Konten artikel
               Padding(
                 padding: const EdgeInsets.all(16),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
+                    // Kategori dan waktu baca
                     Row(
                       children: [
                         Container(
@@ -368,6 +389,7 @@ class _EducationScreenState extends State<EducationScreen> {
                       ],
                     ),
                     const SizedBox(height: 12),
+                    // Judul
                     Text(
                       article.title,
                       style: TextStyleHelper.titleLarge.copyWith(
@@ -377,6 +399,7 @@ class _EducationScreenState extends State<EducationScreen> {
                       overflow: TextOverflow.ellipsis,
                     ),
                     const SizedBox(height: 8),
+                    // Ringkasan
                     Text(
                       article.summary,
                       style: TextStyleHelper.bodyMedium.copyWith(
@@ -386,6 +409,7 @@ class _EducationScreenState extends State<EducationScreen> {
                       overflow: TextOverflow.ellipsis,
                     ),
                     const SizedBox(height: 12),
+                    // Link "Baca selengkapnya"
                     Row(
                       children: [
                         Text(

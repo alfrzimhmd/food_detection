@@ -1,3 +1,4 @@
+// lib/screens/main_screen.dart
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'home_screen.dart';
@@ -9,6 +10,8 @@ import '../utils/app_colors.dart';
 import '../utils/text_style_helper.dart';
 import '../providers/app_state.dart';
 
+/// Halaman utama aplikasi dengan bottom navigation bar
+/// Menampilkan 5 tab: Beranda, Scan, Misi, Edukasi, Riwayat
 class MainScreen extends StatefulWidget {
   const MainScreen({super.key});
 
@@ -17,8 +20,10 @@ class MainScreen extends StatefulWidget {
 }
 
 class _MainScreenState extends State<MainScreen> {
+  // Index halaman yang sedang aktif
   int _currentIndex = 0;
 
+  // Daftar halaman yang tersedia
   final List<Widget> _pages = const [
     HomeScreen(),
     ScanScreen(),
@@ -27,6 +32,7 @@ class _MainScreenState extends State<MainScreen> {
     HistoryScreen(),
   ];
 
+  // Daftar item navigasi
   final List<NavItem> _navItems = const [
     NavItem(
       index: 0,
@@ -60,6 +66,7 @@ class _MainScreenState extends State<MainScreen> {
     ),
   ];
 
+  /// Mengganti halaman berdasarkan index
   void _changePage(int index) {
     setState(() {
       _currentIndex = index;
@@ -70,55 +77,66 @@ class _MainScreenState extends State<MainScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppColors.background,
+      // Menggunakan IndexedStack untuk mempertahankan state halaman
       body: IndexedStack(
         index: _currentIndex,
         children: _pages,
       ),
-      bottomNavigationBar: SafeArea(
-        top: false,
-        child: Container(
-          height: 82,
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: const BorderRadius.only(
-              topLeft: Radius.circular(24),
-              topRight: Radius.circular(24),
+      // Bottom navigation bar custom
+      bottomNavigationBar: _buildBottomNavigationBar(),
+    );
+  }
+
+  // ==================== BOTTOM NAVIGATION BAR ====================
+  
+  /// Membangun bottom navigation bar dengan desain custom
+  Widget _buildBottomNavigationBar() {
+    return SafeArea(
+      top: false,
+      child: Container(
+        height: 82,
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: const BorderRadius.only(
+            topLeft: Radius.circular(24),
+            topRight: Radius.circular(24),
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.08),
+              blurRadius: 16,
+              offset: const Offset(0, -4),
             ),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withValues(alpha: 0.08),
-                blurRadius: 16,
-                offset: const Offset(0, -4),
-              ),
-            ],
-          ),
-          child: Stack(
-            clipBehavior: Clip.none,
-            alignment: Alignment.topCenter,
-            children: [
-              Row(
-                children: [
-                  Expanded(child: _buildRegularNavItem(_navItems[0])),
-                  Expanded(child: _buildRegularNavItem(_navItems[4])),
-                  const SizedBox(width: 80),
-                  Expanded(child: _buildRegularNavItemWithBadge(_navItems[2])),
-                  Expanded(child: _buildRegularNavItem(_navItems[3])),
-                ],
-              ),
-              Positioned(
-                top: -28,
-                child: _buildCenterNavItem(_navItems[1]),
-              ),
-            ],
-          ),
+          ],
+        ),
+        child: Stack(
+          clipBehavior: Clip.none,
+          alignment: Alignment.topCenter,
+          children: [
+            // Row navigasi biasa (tanpa tombol tengah)
+            Row(
+              children: [
+                Expanded(child: _buildRegularNavItem(_navItems[0])),
+                Expanded(child: _buildRegularNavItem(_navItems[4])),
+                const SizedBox(width: 80), // Spasi untuk tombol tengah
+                Expanded(child: _buildRegularNavItemWithBadge(_navItems[2])),
+                Expanded(child: _buildRegularNavItem(_navItems[3])),
+              ],
+            ),
+            // Tombol scan di tengah (melayang)
+            Positioned(
+              top: -28,
+              child: _buildCenterNavItem(_navItems[1]),
+            ),
+          ],
         ),
       ),
     );
   }
 
-  // ==========================================================
-  // NAVIGATION ITEM BIASA (TANPA BADGE)
-  // ==========================================================
+  // ==================== REGULAR NAVIGATION ITEM ====================
+  
+  /// Membangun item navigasi biasa (tanpa badge)
   Widget _buildRegularNavItem(NavItem item) {
     final bool isSelected = _currentIndex == item.index;
 
@@ -150,9 +168,9 @@ class _MainScreenState extends State<MainScreen> {
     );
   }
 
-  // ==========================================================
-  // NAVIGATION ITEM DENGAN BADGE (UNTUK MISI)
-  // ==========================================================
+  // ==================== NAVIGATION ITEM WITH BADGE ====================
+  
+  /// Membangun item navigasi dengan badge (khusus untuk misi)
   Widget _buildRegularNavItemWithBadge(NavItem item) {
     final bool isSelected = _currentIndex == item.index;
     
@@ -183,6 +201,7 @@ class _MainScreenState extends State<MainScreen> {
                       size: 23,
                       color: isSelected ? AppColors.primary : AppColors.textLight,
                     ),
+                    // Badge notification
                     if (hasBadge)
                       Positioned(
                         top: -6,
@@ -225,9 +244,9 @@ class _MainScreenState extends State<MainScreen> {
     );
   }
 
-  // ==========================================================
-  // TOMBOL SCAN TENGAH
-  // ==========================================================
+  // ==================== CENTER NAVIGATION ITEM (SCAN) ====================
+  
+  /// Membangun tombol scan di tengah dengan animasi
   Widget _buildCenterNavItem(NavItem item) {
     final bool isSelected = _currentIndex == item.index;
 
@@ -236,6 +255,7 @@ class _MainScreenState extends State<MainScreen> {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
+          // Tombol scan dengan gradient dan shadow
           AnimatedContainer(
             duration: const Duration(milliseconds: 250),
             width: 62,
@@ -275,6 +295,7 @@ class _MainScreenState extends State<MainScreen> {
             ),
           ),
           const SizedBox(height: 8),
+          // Label di bawah tombol
           Text(
             item.label,
             style: TextStyleHelper.captionSmall.copyWith(
@@ -288,10 +309,9 @@ class _MainScreenState extends State<MainScreen> {
   }
 }
 
-// ==========================================================
-// MODEL ITEM NAVIGASI
-// ==========================================================
+// ==================== NAVIGATION ITEM MODEL ====================
 
+/// Model untuk item navigasi
 class NavItem {
   final int index;
   final String label;

@@ -7,8 +7,8 @@ import '../providers/app_state.dart';
 import '../utils/app_colors.dart';
 import '../utils/text_style_helper.dart';
 import 'profile_screen.dart';
-import 'history_detail_screen.dart';
-import 'history_screen.dart';
+import 'history/history_detail_screen.dart';
+import 'history/history_screen.dart';
 
 // ─────────────────────────────────────────────
 //  HOME SCREEN

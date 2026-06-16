@@ -6,11 +6,15 @@ import '../data/database_manager.dart';
 import '../data/nutrition_data.dart';
 import '../services/mission_service.dart';
 
+/// Manajer state utama aplikasi yang mengelola semua data dan state.
+/// Bertanggung jawab untuk sinkronisasi antara database, misi, dan UI.
 class AppState extends ChangeNotifier {
   final DatabaseManager _dbManager = DatabaseManager();
   late final MissionService _missionService;
   
-  // State variables
+  // ==================== STATE VARIABLES ====================
+  
+  // State utama
   bool _isLoading = false;
   bool _isOnboarded = false;
   Map<String, dynamic>? _userProfile;
@@ -19,16 +23,18 @@ class AppState extends ChangeNotifier {
   List<Map<String, dynamic>> _scanHistory = [];
   List<Map<String, dynamic>> _recentHistory = [];
   
-  // 🎯 Mission state variables
+  // State misi
   List<Map<String, dynamic>> _dailyMissions = [];
   Map<String, dynamic> _missionStats = {};
   int _userStreak = 0;
   bool _isMissionLoading = false;
   
-  // 🔥 Flag untuk mencegah multiple refresh
+  // Flag untuk mencegah multiple refresh
   bool _isRefreshing = false;
   
-  // Getters
+  // ==================== GETTERS ====================
+  
+  // State getters
   bool get isLoading => _isLoading;
   bool get isOnboarded => _isOnboarded;
   Map<String, dynamic>? get userProfile => _userProfile;
@@ -37,7 +43,7 @@ class AppState extends ChangeNotifier {
   List<Map<String, dynamic>> get scanHistory => _scanHistory;
   List<Map<String, dynamic>> get recentHistory => _recentHistory;
   
-  // 🎯 Mission getters
+  // Mission getters
   List<Map<String, dynamic>> get dailyMissions => _dailyMissions;
   Map<String, dynamic> get missionStats => _missionStats;
   int get userStreak => _userStreak;
@@ -49,13 +55,14 @@ class AppState extends ChangeNotifier {
   double get targetCarbs => _userProfile?['target_carbs'] as double? ?? 250.0;
   double get targetFat => _userProfile?['target_fat'] as double? ?? 65.0;
   
-  // 🎯 Mission helper getters
+  // Mission helper getters
   int get totalPoints => _missionStats['total_points'] as int? ?? 0;
   int get totalMissionsCompleted => _missionStats['total_missions_completed'] as int? ?? 0;
   int get badgesCount => _missionStats['badges_count'] as int? ?? 0;
   List<Map<String, dynamic>> get badges => _missionStats['badges'] as List<Map<String, dynamic>>? ?? [];
   
-  // Progress percentage
+  // ==================== PROGRESS PERCENTAGE ====================
+  
   double get calorieProgress => (_todayCalories / targetCalories).clamp(0.0, 1.0);
   int get calorieProgressPercent => (calorieProgress * 100).toInt();
   
@@ -63,7 +70,9 @@ class AppState extends ChangeNotifier {
   double get carbsProgress => (_todayNutrition['total_carbs'] ?? 0) / targetCarbs;
   double get fatProgress => (_todayNutrition['total_fat'] ?? 0) / targetFat;
   
-  // Initialize - cek onboarding status
+  // ==================== INISIALISASI ====================
+  
+  /// Inisialisasi state, memeriksa onboarding dan memuat data
   Future<void> init() async {
     _isLoading = true;
     notifyListeners();
@@ -74,11 +83,11 @@ class AppState extends ChangeNotifier {
       // Inisialisasi MissionService
       _missionService = MissionService();
       
-      // 🔥 PERBAIKAN: Cek user profile TERLEBIH DAHULU
+      // Cek user profile TERLEBIH DAHULU
       _userProfile = await _dbManager.getUserProfile();
       _isOnboarded = _userProfile != null;
       
-      debugPrint('🔍 User profile exists: $_isOnboarded');
+      debugPrint('User profile exists: $_isOnboarded');
       
       if (_isOnboarded) {
         // Hanya load misi jika user sudah ada profile
@@ -89,24 +98,27 @@ class AppState extends ChangeNotifier {
       } else {
         // Reset onboarding flag di SharedPreferences untuk jaga-jaga
         await _dbManager.setOnboardingCompleted(false);
-        debugPrint('⚠️ No user profile found, onboarding required');
+        debugPrint('No user profile found, onboarding required');
       }
       
     } catch (e) {
-      debugPrint('❌ Init error: $e');
+      debugPrint('Init error: $e');
     } finally {
       _isLoading = false;
       notifyListeners();
     }
   }
-    
-  // Check if user has profile
+  
+  /// Memeriksa apakah user sudah memiliki profil
   Future<void> checkOnboardingStatus() async {
     _userProfile = await _dbManager.getUserProfile();
     _isOnboarded = _userProfile != null;
     notifyListeners();
   }
   
+  // ==================== MISSION DATA MANAGEMENT ====================
+  
+  /// Memuat data misi untuk hari ini
   Future<void> loadMissionData() async {
     if (!_isOnboarded) return;
     
@@ -117,24 +129,24 @@ class AppState extends ChangeNotifier {
       final results = await Future.wait([
         _missionService.getTodayActiveMissions(),
         _missionService.getMissionStats(),
-        _dbManager.getUserStreak(), // 🔥 Pastikan panggil dari dbManager langsung
+        _dbManager.getUserStreak(), // Ambil streak dari completed missions
       ]);
       
       _dailyMissions = results[0] as List<Map<String, dynamic>>;
       _missionStats = results[1] as Map<String, dynamic>;
-      _userStreak = results[2] as int; // 🔥 Ini sekarang streak dari completed missions
+      _userStreak = results[2] as int;
       
-      debugPrint('🎯 Mission data loaded: ${_dailyMissions.length} missions, mission streak: $_userStreak');
+      debugPrint('Mission data loaded: ${_dailyMissions.length} missions, mission streak: $_userStreak');
       
     } catch (e) {
-      debugPrint('❌ Load mission data error: $e');
+      debugPrint('Load mission data error: $e');
     } finally {
       _isMissionLoading = false;
       notifyListeners();
     }
   }
 
-  // 🎯 Refresh mission data only
+  /// Refresh data misi saja
   Future<void> refreshMissionData() async {
     if (!_isOnboarded) return;
     
@@ -152,13 +164,13 @@ class AppState extends ChangeNotifier {
       notifyListeners();
       
     } catch (e) {
-      debugPrint('❌ Refresh mission data error: $e');
+      debugPrint('Refresh mission data error: $e');
     }
   }
   
-  // 🎯 Claim mission reward
+  /// Klaim hadiah misi
   Future<bool> claimMissionReward(int missionProgressId) async {
-    debugPrint('🎯 Claiming mission reward: $missionProgressId');
+    debugPrint('Claiming mission reward: $missionProgressId');
     
     try {
       final success = await _missionService.claimMissionReward(missionProgressId);
@@ -168,29 +180,32 @@ class AppState extends ChangeNotifier {
         await refreshMissionData();
         // Refresh user profile untuk update poin
         await loadHomeData();
-        debugPrint('✅ Mission reward claimed successfully');
+        debugPrint('Mission reward claimed successfully');
       }
       
       return success;
       
     } catch (e) {
-      debugPrint('❌ Claim mission reward error: $e');
+      debugPrint('Claim mission reward error: $e');
       return false;
     }
   }
   
-  // 🎯 Update mission progress after scan (dipanggil setelah scan)
+  /// Update progress misi setelah scan
   Future<void> updateMissionProgressAfterScan(Map<String, dynamic> scanData) async {
     try {
       await _missionService.updateMissionProgressAfterScan(scanData);
       // Refresh mission data untuk update UI
       await refreshMissionData();
-      debugPrint('✅ Mission progress updated after scan');
+      debugPrint('Mission progress updated after scan');
     } catch (e) {
-      debugPrint('❌ Update mission progress error: $e');
+      debugPrint('Update mission progress error: $e');
     }
   }
   
+  // ==================== USER PROFILE MANAGEMENT ====================
+  
+  /// Menyimpan profil user
   Future<bool> saveUserProfile({
     required String name,
     required int targetCalories,
@@ -213,7 +228,7 @@ class AppState extends ChangeNotifier {
       _userProfile = await _dbManager.getUserProfile();
       _isOnboarded = true;
       
-      // 🔥 Setelah onboarding, load misi
+      // Setelah onboarding, load misi
       await _missionService.loadMissionsFromJson();
       await _missionService.checkAndResetDailyMissions();
       await loadHomeData();
@@ -229,7 +244,9 @@ class AppState extends ChangeNotifier {
     }
   }
   
-  // Load all home data
+  // ==================== HOME DATA MANAGEMENT ====================
+  
+  /// Memuat semua data untuk halaman home
   Future<void> loadHomeData() async {
     if (!_isOnboarded) return;
     
@@ -250,8 +267,8 @@ class AppState extends ChangeNotifier {
       _scanHistory = (results[3] as List<Map<String, dynamic>>?) ?? [];
       _recentHistory = _scanHistory.take(5).toList();
       
-      debugPrint('📊 AppState: Loaded ${_scanHistory.length} history items');
-      debugPrint('📊 AppState: Recent history ${_recentHistory.length} items');
+      debugPrint('AppState: Loaded ${_scanHistory.length} history items');
+      debugPrint('AppState: Recent history ${_recentHistory.length} items');
       
     } catch (e) {
       debugPrint('Load home data error: $e');
@@ -261,15 +278,15 @@ class AppState extends ChangeNotifier {
     }
   }
   
-  // Refresh data dengan mencegah multiple refresh
+  /// Refresh data dengan mencegah multiple refresh
   Future<void> refresh() async {
     if (_isRefreshing) {
-      debugPrint('⚠️ Refresh already in progress, skipping...');
+      debugPrint('Refresh already in progress, skipping...');
       return;
     }
     
     _isRefreshing = true;
-    debugPrint('🔄 AppState.refresh() called - timestamp: ${DateTime.now()}');
+    debugPrint('AppState.refresh() called - timestamp: ${DateTime.now()}');
     
     try {
       if (!_isOnboarded) return;
@@ -285,7 +302,7 @@ class AppState extends ChangeNotifier {
       ]).timeout(
         const Duration(seconds: 5),
         onTimeout: () {
-          debugPrint('⚠️ Database timeout, returning default values');
+          debugPrint('Database timeout, returning default values');
           return [null, {}, 0, [], [], {}, 0];
         },
       );
@@ -299,20 +316,22 @@ class AppState extends ChangeNotifier {
       _missionStats = results[5] as Map<String, dynamic>;
       _userStreak = results[6] as int;
       
-      debugPrint('📊 AppState: Loaded ${_scanHistory.length} history items');
-      debugPrint('🎯 AppState: Loaded ${_dailyMissions.length} missions');
+      debugPrint('AppState: Loaded ${_scanHistory.length} history items');
+      debugPrint('AppState: Loaded ${_dailyMissions.length} missions');
       
       notifyListeners();
       
     } catch (e, stacktrace) {
-      debugPrint('❌ AppState.refresh() error: $e');
-      debugPrint('📚 Stacktrace: $stacktrace');
+      debugPrint('AppState.refresh() error: $e');
+      debugPrint('Stacktrace: $stacktrace');
     } finally {
       _isRefreshing = false;
     }
   }
   
-  // Save scan history and auto refresh
+  // ==================== SCAN HISTORY MANAGEMENT ====================
+  
+  /// Menyimpan riwayat scan dan update progress misi
   Future<int> saveScanHistory({
     required String imagePath,
     required String label,
@@ -328,9 +347,9 @@ class AppState extends ChangeNotifier {
     String? healthTip,
     String? warning,
   }) async {
-    debugPrint('💾💾💾 AppState.saveScanHistory() START 💾💾💾');
-    debugPrint('📊 Food: $indonesianName');
-    debugPrint('📊 Protein: $protein, Fiber: ${fiber ?? 0}, Sodium: ${sodium ?? 0}');
+    debugPrint('AppState.saveScanHistory() START');
+    debugPrint('Food: $indonesianName');
+    debugPrint('Protein: $protein, Fiber: ${fiber ?? 0}, Sodium: ${sodium ?? 0}');
     
     // Build scan data untuk update mission
     final scanData = {
@@ -346,7 +365,7 @@ class AppState extends ChangeNotifier {
       'health_level': healthLevel,
     };
     
-    debugPrint('📦 scanData: $scanData');
+    debugPrint('scanData: $scanData');
     
     final id = await _dbManager.saveScanHistory(
       imagePath: imagePath,
@@ -365,21 +384,61 @@ class AppState extends ChangeNotifier {
     );
     
     if (id != -1) {
-      debugPrint('✅ Scan saved with id=$id');
+      debugPrint('Scan saved with id=$id');
       
-      debugPrint('🎯🎯🎯 CALLING updateMissionProgressAfterScan 🎯🎯🎯');
+      debugPrint('CALLING updateMissionProgressAfterScan');
       await updateMissionProgressAfterScan(scanData);
-      debugPrint('✅✅✅ updateMissionProgressAfterScan COMPLETED ✅✅✅');
+      debugPrint('updateMissionProgressAfterScan COMPLETED');
       
       await refresh();
-      debugPrint('✅ Refresh completed after scan');
+      debugPrint('Refresh completed after scan');
     }
     
-    debugPrint('💾💾💾 AppState.saveScanHistory() END 💾💾💾');
+    debugPrint('AppState.saveScanHistory() END');
     return id;
   }
   
-  // Reset all data (including missions)
+  /// Menghapus riwayat scan berdasarkan ID
+  Future<void> deleteScanHistory(int id) async {
+    debugPrint('AppState.deleteScanHistory: $id');
+    
+    try {
+      await _dbManager.deleteScanHistory(id);
+      debugPrint('Database record deleted');
+      
+      await _clearImageCache();
+      
+      _scanHistory = _scanHistory.where((item) => item['id'] != id).toList();
+      _recentHistory = _scanHistory.take(5).toList();
+      notifyListeners();
+      
+      unawaited(_backgroundRefresh());
+      
+    } catch (e) {
+      debugPrint('DeleteScanHistory error: $e');
+      await refresh();
+      rethrow;
+    }
+  }
+  
+  /// Menghapus semua riwayat scan
+  Future<void> deleteAllScanHistory() async {
+    debugPrint('AppState.deleteAllScanHistory');
+    
+    try {
+      await _dbManager.resetAllData();
+      await _clearImageCache();
+      await Future.delayed(const Duration(milliseconds: 100));
+      await refresh();
+    } catch (e) {
+      debugPrint('DeleteAllScanHistory error: $e');
+      rethrow;
+    }
+  }
+  
+  // ==================== RESET DATA ====================
+  
+  /// Reset semua data (termasuk misi)
   Future<void> resetAllData() async {
     _isLoading = true;
     notifyListeners();
@@ -406,7 +465,9 @@ class AppState extends ChangeNotifier {
     }
   }
   
-  // Get health level helper
+  // ==================== HELPER METHODS ====================
+  
+  /// Mendapatkan level kesehatan berdasarkan label makanan
   String getHealthLevel(String label) {
     return NutritionData.getHealthLevel(label).toString().split('.').last;
   }
@@ -440,58 +501,26 @@ class AppState extends ChangeNotifier {
     return streak;
   }
 
-  Future<void> deleteScanHistory(int id) async {
-    debugPrint('🗑️ AppState.deleteScanHistory: $id');
-    
-    try {
-      await _dbManager.deleteScanHistory(id);
-      debugPrint('✅ Database record deleted');
-      
-      await _clearImageCache();
-      
-      _scanHistory = _scanHistory.where((item) => item['id'] != id).toList();
-      _recentHistory = _scanHistory.take(5).toList();
-      notifyListeners();
-      
-      unawaited(_backgroundRefresh());
-      
-    } catch (e) {
-      debugPrint('❌ DeleteScanHistory error: $e');
-      await refresh();
-      rethrow;
-    }
-  }
-
+  // ==================== PRIVATE HELPERS ====================
+  
+  /// Background refresh setelah delay
   Future<void> _backgroundRefresh() async {
     await Future.delayed(const Duration(milliseconds: 500));
     try {
       await refresh();
     } catch (e) {
-      debugPrint('⚠️ Background refresh failed: $e');
+      debugPrint('Background refresh failed: $e');
     }
   }
 
+  /// Membersihkan cache gambar
   Future<void> _clearImageCache() async {
     try {
       PaintingBinding.instance.imageCache.clear();
       PaintingBinding.instance.imageCache.clearLiveImages();
-      debugPrint('🖼️ Image cache cleared');
+      debugPrint('Image cache cleared');
     } catch (e) {
-      debugPrint('⚠️ Failed to clear image cache: $e');
-    }
-  }
-
-  Future<void> deleteAllScanHistory() async {
-    debugPrint('🗑️ AppState.deleteAllScanHistory');
-    
-    try {
-      await _dbManager.resetAllData();
-      await _clearImageCache();
-      await Future.delayed(const Duration(milliseconds: 100));
-      await refresh();
-    } catch (e) {
-      debugPrint('❌ DeleteAllScanHistory error: $e');
-      rethrow;
+      debugPrint('Failed to clear image cache: $e');
     }
   }
 }

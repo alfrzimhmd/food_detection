@@ -1,12 +1,11 @@
 // lib/screens/education_detail_screen.dart
-// SPDX-License-Identifier: Apache-2.0
-
 import 'package:flutter/material.dart';
 import '../../utils/app_colors.dart';
 import '../../utils/text_style_helper.dart';
 import '../../models/education_model.dart';
 import '../../services/education_service.dart';
 
+/// Halaman detail artikel edukasi dengan konten lengkap dan rekomendasi
 class EducationDetailScreen extends StatefulWidget {
   final EducationArticle article;
   
@@ -31,6 +30,7 @@ class _EducationDetailScreenState extends State<EducationDetailScreen> {
     _loadRecommendations();
   }
 
+  /// Memuat rekomendasi artikel terkait
   Future<void> _loadRecommendations() async {
     await _educationService.loadEducationData();
     setState(() {
@@ -79,6 +79,9 @@ class _EducationDetailScreenState extends State<EducationDetailScreen> {
     );
   }
 
+  // ==================== APP BAR ====================
+  
+  /// Membangun app bar dengan tombol kembali dan bookmark
   Widget _buildAppBar() {
     return Container(
       color: AppColors.primaryDark,
@@ -88,6 +91,7 @@ class _EducationDetailScreenState extends State<EducationDetailScreen> {
           padding: const EdgeInsets.fromLTRB(20, 12, 12, 14),
           child: Row(
             children: [
+              // Tombol kembali
               GestureDetector(
                 onTap: () => Navigator.pop(context),
                 child: Container(
@@ -101,6 +105,7 @@ class _EducationDetailScreenState extends State<EducationDetailScreen> {
                 ),
               ),
               const SizedBox(width: 12),
+              // Judul kategori
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -119,6 +124,7 @@ class _EducationDetailScreenState extends State<EducationDetailScreen> {
                   ],
                 ),
               ),
+              // Tombol bookmark
               Container(
                 width: 34,
                 height: 34,
@@ -151,10 +157,14 @@ class _EducationDetailScreenState extends State<EducationDetailScreen> {
     );
   }
 
+  // ==================== HEADER ====================
+  
+  /// Membangun header dengan gambar atau background warna
   Widget _buildHeader(Color categoryColor, bool isDark) {
     final hasImage = widget.article.imageAsset != null && widget.article.imageAsset!.isNotEmpty;
     
     if (hasImage) {
+      // Header dengan gambar
       return Stack(
         children: [
           Container(
@@ -167,6 +177,7 @@ class _EducationDetailScreenState extends State<EducationDetailScreen> {
               ),
             ),
           ),
+          // Gradient overlay untuk readability
           Container(
             width: double.infinity,
             height: 240,
@@ -181,6 +192,7 @@ class _EducationDetailScreenState extends State<EducationDetailScreen> {
               ),
             ),
           ),
+          // Judul artikel di overlay
           Positioned(
             bottom: 16,
             left: 20,
@@ -198,6 +210,7 @@ class _EducationDetailScreenState extends State<EducationDetailScreen> {
         ],
       );
     } else {
+      // Header tanpa gambar (fallback)
       return Container(
         width: double.infinity,
         padding: const EdgeInsets.all(20),
@@ -216,6 +229,9 @@ class _EducationDetailScreenState extends State<EducationDetailScreen> {
     }
   }
 
+  // ==================== SUMMARY BOX ====================
+  
+  /// Membangun box ringkasan artikel
   Widget _buildSummaryBox(Color categoryColor, bool isDark) {
     return Container(
       padding: const EdgeInsets.all(16),
@@ -250,6 +266,9 @@ class _EducationDetailScreenState extends State<EducationDetailScreen> {
     );
   }
 
+  // ==================== CONTENT ====================
+  
+  /// Membangun konten artikel yang sudah diformat
   Widget _buildContent(bool isDark) {
     return Text(
       _formatContent(widget.article.content),
@@ -261,10 +280,9 @@ class _EducationDetailScreenState extends State<EducationDetailScreen> {
     );
   }
 
-  // ============================================================
-  // REKOMENDASI ARTIKEL - DIPERBAIKI DENGAN CARD GAMBAR
-  // ============================================================
+  // ==================== RECOMMENDATIONS ====================
   
+  /// Membangun section rekomendasi artikel terkait
   Widget _buildRecommendationsSection(bool isDark) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -306,6 +324,7 @@ class _EducationDetailScreenState extends State<EducationDetailScreen> {
     );
   }
 
+  /// Membangun card rekomendasi artikel
   Widget _buildRecommendationCard(EducationArticle article, bool isDark) {
     final categoryColor = Color(int.parse(article.colorHex.replaceFirst('#', '0xFF')));
     final hasImage = article.imageAsset != null && article.imageAsset!.isNotEmpty;
@@ -488,6 +507,9 @@ class _EducationDetailScreenState extends State<EducationDetailScreen> {
     );
   }
 
+  // ==================== HELPER METHODS ====================
+  
+  /// Memformat konten artikel (menambahkan newline, menghapus markdown)
   String _formatContent(String content) {
     String formatted = content;
     formatted = formatted.replaceAll('•', '\n•');

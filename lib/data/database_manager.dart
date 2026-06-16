@@ -5,12 +5,22 @@ import 'package:sqflite/sqflite.dart';
 import 'package:path/path.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+/// Manajer database utama untuk aplikasi NutriScan.
+/// Mengelola semua operasi database termasuk scan history, profil user, misi, dan badge.
 class DatabaseManager {
+  // Singleton instance
   static final DatabaseManager _instance = DatabaseManager._internal();
+  
+  // Instance database
   static Database? _database;
+  
+  // Flag untuk mencegah inisialisasi ganda
   static bool _isInitializing = false;
+  
+  // Notifier untuk memberi tahu widget tentang perubahan database
   static final ChangeNotifier databaseUpdateNotifier = ChangeNotifier();
 
+  /// Mengkonversi nilai ke double dengan aman
   double _safeToDouble(dynamic value) {
     if (value == null) return 0.0;
     if (value is int) return value.toDouble();
@@ -19,23 +29,28 @@ class DatabaseManager {
     return 0.0;
   }
 
+  /// Mengkonversi nilai ke string dengan aman
   String _safeToString(dynamic value) {
     if (value == null) return '';
     return value.toString();
   }
 
+  // Constructor private untuk singleton
   DatabaseManager._internal();
 
+  // Factory untuk mendapatkan instance singleton
   factory DatabaseManager() => _instance;
 
-  // ─── Method init untuk inisialisasi awal ───────────────────
+  // ==================== INISIALISASI DATABASE ====================
+
+  /// Method init untuk inisialisasi awal database
   Future<void> init() async {
-    debugPrint('🔵 DatabaseManager.init() dipanggil');
+    debugPrint('DatabaseManager.init() dipanggil');
     await _initDatabase();
-    debugPrint('✅ DatabaseManager.init() selesai');
+    debugPrint('DatabaseManager.init() selesai');
   }
 
-  // ─── Getter database dengan thread safety ───────────────────
+  /// Getter database dengan thread safety
   Future<Database> get database async {
     if (_database != null && _database!.isOpen) {
       return _database!;
@@ -43,28 +58,29 @@ class DatabaseManager {
     return await _initDatabase();
   }
 
-  // ─── Inisialisasi database ──────────────────────────────────
+  /// Inisialisasi database dengan pembuatan tabel jika belum ada
   Future<Database> _initDatabase() async {
+    // Cek apakah inisialisasi sedang berlangsung
     if (_isInitializing) {
-      debugPrint('⏳ Database sedang diinisialisasi, menunggu...');
+      debugPrint('Database sedang diinisialisasi, menunggu...');
       int waitCount = 0;
       while (_isInitializing && waitCount < 50) {
         await Future.delayed(const Duration(milliseconds: 50));
         waitCount++;
       }
       if (_database != null && _database!.isOpen) {
-        debugPrint('✅ Database sudah siap setelah menunggu');
+        debugPrint('Database sudah siap setelah menunggu');
         return _database!;
       }
     }
 
     _isInitializing = true;
-    debugPrint('🔵 Memulai inisialisasi database...');
+    debugPrint('Memulai inisialisasi database...');
 
     try {
       final directory = await getApplicationDocumentsDirectory();
       final path = join(directory.path, 'food_detection.db');
-      debugPrint('📂 Path database: $path');
+      debugPrint('Path database: $path');
 
       _database = await openDatabase(
         path,
@@ -72,22 +88,22 @@ class DatabaseManager {
         onCreate: _onCreate,
       );
 
-      debugPrint('✅ Database berhasil dibuka (versi 1)');
+      debugPrint('Database berhasil dibuka (versi 1)');
       return _database!;
       
     } catch (e) {
-      debugPrint('❌ ERROR inisialisasi database: $e');
+      debugPrint('ERROR inisialisasi database: $e');
       _database = null;
       rethrow;
     } finally {
       _isInitializing = false;
-      debugPrint('🔵 Inisialisasi database selesai');
+      debugPrint('Inisialisasi database selesai');
     }
   }
 
-  // ─── Membuat semua tabel dari awal (versi 1) ────────────────
+  /// Membuat semua tabel dari awal (versi 1)
   Future<void> _onCreate(Database db, int version) async {
-    debugPrint('📦 Membuat database versi $version dari awal...');
+    debugPrint('Membuat database versi $version dari awal...');
     
     try {
       // 1. Tabel corrections untuk koreksi KNN
@@ -101,7 +117,7 @@ class DatabaseManager {
           updated_at INTEGER
         )
       ''');
-      debugPrint('✅ Tabel corrections dibuat');
+      debugPrint('Tabel corrections dibuat');
 
       // 2. Tabel user_profile
       await db.execute('''
@@ -118,7 +134,7 @@ class DatabaseManager {
           updated_at INTEGER
         )
       ''');
-      debugPrint('✅ Tabel user_profile dibuat');
+      debugPrint('Tabel user_profile dibuat');
 
       // 3. Tabel scan_history
       await db.execute('''
@@ -140,7 +156,7 @@ class DatabaseManager {
           scanned_at INTEGER NOT NULL
         )
       ''');
-      debugPrint('✅ Tabel scan_history dibuat');
+      debugPrint('Tabel scan_history dibuat');
 
       // 4. Tabel daily_progress
       await db.execute('''
@@ -154,7 +170,7 @@ class DatabaseManager {
           updated_at INTEGER
         )
       ''');
-      debugPrint('✅ Tabel daily_progress dibuat');
+      debugPrint('Tabel daily_progress dibuat');
 
       // 5. Tabel missions (master data misi dari JSON)
       await db.execute('''
@@ -173,7 +189,7 @@ class DatabaseManager {
           is_active INTEGER DEFAULT 1
         )
       ''');
-      debugPrint('✅ Tabel missions dibuat');
+      debugPrint('Tabel missions dibuat');
 
       // 6. Tabel user_mission_progress (progress misi user)
       await db.execute('''
@@ -188,7 +204,7 @@ class DatabaseManager {
           FOREIGN KEY (mission_id) REFERENCES missions(id)
         )
       ''');
-      debugPrint('✅ Tabel user_mission_progress dibuat');
+      debugPrint('Tabel user_mission_progress dibuat');
 
       // 7. Tabel completed_missions_history (riwayat misi selesai)
       await db.execute('''
@@ -199,7 +215,7 @@ class DatabaseManager {
           points_earned INTEGER NOT NULL
         )
       ''');
-      debugPrint('✅ Tabel completed_missions_history dibuat');
+      debugPrint('Tabel completed_missions_history dibuat');
 
       // 8. Tabel badges (lencana yang sudah dimiliki user)
       await db.execute('''
@@ -209,7 +225,7 @@ class DatabaseManager {
           earned_date TEXT NOT NULL
         )
       ''');
-      debugPrint('✅ Tabel user_badges dibuat');
+      debugPrint('Tabel user_badges dibuat');
 
       // Index untuk performa query
       await db.execute('CREATE INDEX idx_corrections_hash ON corrections(image_hash)');
@@ -217,19 +233,20 @@ class DatabaseManager {
       await db.execute('CREATE INDEX idx_mission_progress_mission ON user_mission_progress(mission_id)');
       await db.execute('CREATE INDEX idx_mission_progress_date ON user_mission_progress(assigned_date)');
       await db.execute('CREATE INDEX idx_mission_progress_status ON user_mission_progress(status)');
-      debugPrint('✅ Index-index berhasil dibuat');
+      debugPrint('Index-index berhasil dibuat');
 
-      debugPrint('⚠️ Tidak ada default user profile - onboarding akan muncul');
-
-      debugPrint('🎉 Semua tabel berhasil dibuat!');
+      debugPrint('Tidak ada default user profile - onboarding akan muncul');
+      debugPrint('Semua tabel berhasil dibuat!');
       
     } catch (e) {
-      debugPrint('❌ ERROR saat membuat tabel: $e');
+      debugPrint('ERROR saat membuat tabel: $e');
       rethrow;
     }
   }
 
-  // ─── Helper untuk safe data conversion ─────────────────────
+  // ==================== HELPER FUNCTIONS ====================
+
+  /// Helper untuk safe data conversion (single row)
   Map<String, dynamic> _safeRow(Map<String, dynamic> row) {
     final safe = <String, dynamic>{};
     for (final entry in row.entries) {
@@ -257,29 +274,32 @@ class DatabaseManager {
     return safe;
   }
 
+  /// Helper untuk safe data conversion (multiple rows)
   List<Map<String, dynamic>> _safeRows(List<Map<String, dynamic>> rows) {
     return rows.map(_safeRow).toList();
   }
 
-  // ─── 1. KNN Corrections ────────────────────────────────────
-  
+  // ==================== 1. KNN CORRECTIONS ====================
+
+  /// Menghitung hash konsisten dari bytes gambar
   String computeConsistentHash(List<int> imageBytes) {
-    debugPrint('🔵 Menghitung hash untuk ${imageBytes.length} bytes');
+    debugPrint('Menghitung hash untuk ${imageBytes.length} bytes');
     var hash = 0;
     for (int i = 0; i < imageBytes.length; i++) {
       hash = (hash * 31 + imageBytes[i]) & 0xFFFFFFFF;
     }
     final result = hash.toRadixString(16).padLeft(8, '0');
-    debugPrint('✅ Hash: $result');
+    debugPrint('Hash: $result');
     return result;
   }
 
+  /// Insert atau update koreksi KNN berdasarkan hash gambar
   Future<int> insertOrUpdateCorrection({
     required String imageHash,
     required String label,
     required String originalPrediction,
   }) async {
-    debugPrint('🔵 insertOrUpdateCorrection: hash=$imageHash, label=$label');
+    debugPrint('insertOrUpdateCorrection: hash=$imageHash, label=$label');
     final db = await database;
     final now = DateTime.now().millisecondsSinceEpoch;
     final existing = await findByHash(imageHash);
@@ -295,7 +315,7 @@ class DatabaseManager {
         where: 'image_hash = ?',
         whereArgs: [imageHash],
       );
-      debugPrint('✅ Correction diUPDATE: $imageHash → $label');
+      debugPrint('Correction diUPDATE: $imageHash -> $label');
       return result;
     } else {
       final result = await db.insert(
@@ -309,13 +329,14 @@ class DatabaseManager {
         },
         conflictAlgorithm: ConflictAlgorithm.replace,
       );
-      debugPrint('✅ Correction diINSERT: $imageHash → $label');
+      debugPrint('Correction diINSERT: $imageHash -> $label');
       return result;
     }
   }
 
+  /// Mencari koreksi berdasarkan hash gambar
   Future<Map<String, dynamic>?> findByHash(String imageHash) async {
-    debugPrint('🔵 findByHash: $imageHash');
+    debugPrint('findByHash: $imageHash');
     try {
       final db = await database;
       final results = await db.query(
@@ -324,68 +345,73 @@ class DatabaseManager {
         whereArgs: [imageHash],
       );
       if (results.isNotEmpty) {
-        debugPrint('✅ Ditemukan correction untuk hash $imageHash');
+        debugPrint('Ditemukan correction untuk hash $imageHash');
         return _safeRow(results.first);
       }
-      debugPrint('⚠️ Tidak ditemukan correction untuk hash $imageHash');
+      debugPrint('Tidak ditemukan correction untuk hash $imageHash');
       return null;
     } catch (e) {
-      debugPrint('❌ findByHash error: $e');
+      debugPrint('findByHash error: $e');
       return null;
     }
   }
 
+  /// Mendapatkan semua koreksi
   Future<List<Map<String, dynamic>>> getAllCorrections() async {
-    debugPrint('🔵 getAllCorrections');
+    debugPrint('getAllCorrections');
     try {
       final db = await database;
       final rows = await db.query('corrections', orderBy: 'created_at DESC');
-      debugPrint('✅ Mendapatkan ${rows.length} corrections');
+      debugPrint('Mendapatkan ${rows.length} corrections');
       return _safeRows(rows);
     } catch (e) {
-      debugPrint('❌ getAllCorrections error: $e');
+      debugPrint('getAllCorrections error: $e');
       return [];
     }
   }
 
+  /// Mendapatkan jumlah koreksi
   Future<int> getCorrectionsCount() async {
-    debugPrint('🔵 getCorrectionsCount');
+    debugPrint('getCorrectionsCount');
     try {
       final db = await database;
       final result = await db.rawQuery('SELECT COUNT(*) as count FROM corrections');
       final count = result.first['count'] as int? ?? 0;
-      debugPrint('✅ Total corrections: $count');
+      debugPrint('Total corrections: $count');
       return count;
     } catch (e) {
-      debugPrint('❌ getCorrectionsCount error: $e');
+      debugPrint('getCorrectionsCount error: $e');
       return 0;
     }
   }
 
+  /// Menghapus semua koreksi
   Future<void> deleteAllCorrections() async {
-    debugPrint('🔵 deleteAllCorrections');
+    debugPrint('deleteAllCorrections');
     try {
       final db = await database;
       await db.delete('corrections');
-      debugPrint('✅ Semua corrections dihapus');
+      debugPrint('Semua corrections dihapus');
     } catch (e) {
-      debugPrint('❌ deleteAllCorrections error: $e');
+      debugPrint('deleteAllCorrections error: $e');
     }
   }
 
+  /// Menghapus koreksi berdasarkan hash
   Future<void> deleteCorrectionByHash(String imageHash) async {
-    debugPrint('🔵 deleteCorrectionByHash: $imageHash');
+    debugPrint('deleteCorrectionByHash: $imageHash');
     try {
       final db = await database;
       await db.delete('corrections', where: 'image_hash = ?', whereArgs: [imageHash]);
-      debugPrint('✅ Correction dihapus: $imageHash');
+      debugPrint('Correction dihapus: $imageHash');
     } catch (e) {
-      debugPrint('❌ deleteCorrectionByHash error: $e');
+      debugPrint('deleteCorrectionByHash error: $e');
     }
   }
 
-  // ─── 2. User Profile ───────────────────────────────────────
+  // ==================== 2. USER PROFILE ====================
 
+  /// Menyimpan profil user (insert atau update)
   Future<void> saveUserProfile({
     required String name,
     required int targetCalories,
@@ -393,7 +419,7 @@ class DatabaseManager {
     required double targetCarbs,
     required double targetFat,
   }) async {
-    debugPrint('🔵 saveUserProfile: name=$name, calories=$targetCalories');
+    debugPrint('saveUserProfile: name=$name, calories=$targetCalories');
     final db = await database;
     final now = DateTime.now().millisecondsSinceEpoch;
     final existing = await getUserProfile();
@@ -413,7 +439,7 @@ class DatabaseManager {
           where: 'id = ?',
           whereArgs: [existing['id']],
         );
-        debugPrint('✅ User profile diUPDATE: $name');
+        debugPrint('User profile diUPDATE: $name');
       } else {
         await db.insert('user_profile', {
           'name': name,
@@ -426,43 +452,46 @@ class DatabaseManager {
           'created_at': now,
           'updated_at': now,
         });
-        debugPrint('✅ User profile diINSERT: $name');
+        debugPrint('User profile diINSERT: $name');
       }
       await setOnboardingCompleted(true);
     } catch (e) {
-      debugPrint('❌ saveUserProfile error: $e');
+      debugPrint('saveUserProfile error: $e');
       rethrow;
     }
   }
 
+  /// Mendapatkan profil user
   Future<Map<String, dynamic>?> getUserProfile() async {
-    debugPrint('🔵 getUserProfile');
+    debugPrint('getUserProfile');
     try {
       final db = await database;
       final results = await db.query('user_profile', limit: 1);
       if (results.isNotEmpty) {
-        debugPrint('✅ User profile ditemukan');
+        debugPrint('User profile ditemukan');
         return _safeRow(results.first);
       }
-      debugPrint('⚠️ User profile tidak ditemukan');
+      debugPrint('User profile tidak ditemukan');
       return null;
     } catch (e) {
-      debugPrint('❌ getUserProfile error: $e');
+      debugPrint('getUserProfile error: $e');
       return null;
     }
   }
 
+  /// Cek apakah user sudah memiliki profil
   Future<bool> hasUserProfile() async {
     final profile = await getUserProfile();
     final has = profile != null;
-    debugPrint('🔵 hasUserProfile: $has');
+    debugPrint('hasUserProfile: $has');
     return has;
   }
 
-  // ─── User Points & Badges ──────────────────────────────────
+  // ==================== USER POINTS & BADGES ====================
 
+  /// Menambahkan poin ke user
   Future<void> addUserPoints(int points) async {
-    debugPrint('🔵 addUserPoints: +$points points');
+    debugPrint('addUserPoints: +$points points');
     try {
       final db = await database;
       final profile = await getUserProfile();
@@ -475,28 +504,30 @@ class DatabaseManager {
           where: 'id = ?',
           whereArgs: [profile['id']],
         );
-        debugPrint('✅ Poin ditambahkan: $currentPoints → $newPoints');
+        debugPrint('Poin ditambahkan: $currentPoints -> $newPoints');
       }
     } catch (e) {
-      debugPrint('❌ addUserPoints error: $e');
+      debugPrint('addUserPoints error: $e');
     }
   }
 
+  /// Mendapatkan total poin user
   Future<int> getUserTotalPoints() async {
-    debugPrint('🔵 getUserTotalPoints');
+    debugPrint('getUserTotalPoints');
     try {
       final profile = await getUserProfile();
       final points = profile?['total_points'] as int? ?? 0;
-      debugPrint('✅ Total poin user: $points');
+      debugPrint('Total poin user: $points');
       return points;
     } catch (e) {
-      debugPrint('❌ getUserTotalPoints error: $e');
+      debugPrint('getUserTotalPoints error: $e');
       return 0;
     }
   }
 
+  /// Menambahkan badge ke user
   Future<void> addUserBadge(String badgeName) async {
-    debugPrint('🔵 addUserBadge: $badgeName');
+    debugPrint('addUserBadge: $badgeName');
     try {
       final db = await database;
       final now = DateTime.now().toIso8601String();
@@ -512,7 +543,7 @@ class DatabaseManager {
           'badge_name': badgeName,
           'earned_date': now,
         });
-        debugPrint('✅ Lencana baru ditambahkan: $badgeName');
+        debugPrint('Lencana baru ditambahkan: $badgeName');
         
         final allBadges = await getUserBadges();
         final badgesJson = allBadges.map((b) => b['badge_name']).toList();
@@ -526,28 +557,30 @@ class DatabaseManager {
           );
         }
       } else {
-        debugPrint('⚠️ Lencana $badgeName sudah dimiliki');
+        debugPrint('Lencana $badgeName sudah dimiliki');
       }
     } catch (e) {
-      debugPrint('❌ addUserBadge error: $e');
+      debugPrint('addUserBadge error: $e');
     }
   }
 
+  /// Mendapatkan semua badge user
   Future<List<Map<String, dynamic>>> getUserBadges() async {
-    debugPrint('🔵 getUserBadges');
+    debugPrint('getUserBadges');
     try {
       final db = await database;
       final results = await db.query('user_badges', orderBy: 'earned_date DESC');
-      debugPrint('✅ Mendapatkan ${results.length} lencana');
+      debugPrint('Mendapatkan ${results.length} lencana');
       return results;
     } catch (e) {
-      debugPrint('❌ getUserBadges error: $e');
+      debugPrint('getUserBadges error: $e');
       return [];
     }
   }
 
-  // ─── 3. Scan History ───────────────────────────────────────
+  // ==================== 3. SCAN HISTORY ====================
 
+  /// Menyimpan riwayat scan makanan
   Future<int> saveScanHistory({
     required String imagePath,
     required String label,
@@ -563,7 +596,7 @@ class DatabaseManager {
     String? healthTip,
     String? warning,
   }) async {
-    debugPrint('🔵 saveScanHistory: $indonesianName, ${calories}kcal');
+    debugPrint('saveScanHistory: $indonesianName, ${calories}kcal');
     try {
       final db = await database;
       final now = DateTime.now().millisecondsSinceEpoch;
@@ -585,17 +618,18 @@ class DatabaseManager {
         'scanned_at': now,
       });
       
-      debugPrint('✅ Scan history tersimpan dengan id=$id');
+      debugPrint('Scan history tersimpan dengan id=$id');
       return id;
       
     } catch (e) {
-      debugPrint('❌ saveScanHistory error: $e');
+      debugPrint('saveScanHistory error: $e');
       return -1;
     }
   }
 
+  /// Mendapatkan semua riwayat scan
   Future<List<Map<String, dynamic>>> getAllScanHistory() async {
-    debugPrint('🔵 getAllScanHistory - mulai mengambil data...');
+    debugPrint('getAllScanHistory - mulai mengambil data...');
     try {
       final db = await database;
       
@@ -610,7 +644,7 @@ class DatabaseManager {
         ORDER BY scanned_at DESC
       ''');
       
-      debugPrint('✅ getAllScanHistory - berhasil mengambil ${rows.length} record');
+      debugPrint('getAllScanHistory - berhasil mengambil ${rows.length} record');
       
       if (rows.isEmpty) return [];
       
@@ -637,7 +671,7 @@ class DatabaseManager {
           }
           safeRows.add(safeRow);
         } catch (e) {
-          debugPrint('⚠️ Error converting row: $e');
+          debugPrint('Error converting row: $e');
           continue;
         }
       }
@@ -645,13 +679,14 @@ class DatabaseManager {
       return safeRows;
       
     } catch (e) {
-      debugPrint('❌ getAllScanHistory error: $e');
+      debugPrint('getAllScanHistory error: $e');
       return [];
     }
   }
 
+  /// Mendapatkan riwayat scan berdasarkan tanggal
   Future<List<Map<String, dynamic>>> getScanHistoryByDate(DateTime date) async {
-    debugPrint('🔵 getScanHistoryByDate: $date');
+    debugPrint('getScanHistoryByDate: $date');
     try {
       final db = await database;
       final startOfDay = DateTime(date.year, date.month, date.day);
@@ -664,9 +699,8 @@ class DatabaseManager {
         orderBy: 'scanned_at DESC',
       );
       
-      debugPrint('✅ Ditemukan ${rows.length} record untuk tanggal $date');
+      debugPrint('Ditemukan ${rows.length} record untuk tanggal $date');
       
-      // Debug print setiap scan
       for (var row in rows) {
         debugPrint('   - ${row['indonesian_name']}: protein=${row['protein']}, fiber=${row['fiber']}, sodium=${row['sodium']}');
       }
@@ -674,13 +708,14 @@ class DatabaseManager {
       return _safeRows(rows);
       
     } catch (e) {
-      debugPrint('❌ getScanHistoryByDate error: $e');
+      debugPrint('getScanHistoryByDate error: $e');
       return [];
     }
   }
 
+  /// Mendapatkan riwayat scan N hari terakhir
   Future<List<Map<String, dynamic>>> getScanHistoryLastNDays(int days) async {
-    debugPrint('🔵 getScanHistoryLastNDays: $days hari');
+    debugPrint('getScanHistoryLastNDays: $days hari');
     try {
       final db = await database;
       final cutoffDate = DateTime.now().subtract(Duration(days: days));
@@ -693,17 +728,18 @@ class DatabaseManager {
         orderBy: 'scanned_at DESC',
       );
       
-      debugPrint('✅ Ditemukan ${rows.length} record dalam $days hari terakhir');
+      debugPrint('Ditemukan ${rows.length} record dalam $days hari terakhir');
       return _safeRows(rows);
       
     } catch (e) {
-      debugPrint('❌ getScanHistoryLastNDays error: $e');
+      debugPrint('getScanHistoryLastNDays error: $e');
       return [];
     }
   }
 
+  /// Mendapatkan total kalori hari ini
   Future<int> getTodayTotalCalories() async {
-    debugPrint('🔵 getTodayTotalCalories');
+    debugPrint('getTodayTotalCalories');
     try {
       final today = DateTime.now();
       final startOfDay = DateTime(today.year, today.month, today.day);
@@ -716,17 +752,18 @@ class DatabaseManager {
       );
       
       final total = (result.first['total'] as num?)?.toInt() ?? 0;
-      debugPrint('✅ Total kalori hari ini: $total kcal');
+      debugPrint('Total kalori hari ini: $total kcal');
       return total;
       
     } catch (e) {
-      debugPrint('❌ getTodayTotalCalories error: $e');
+      debugPrint('getTodayTotalCalories error: $e');
       return 0;
     }
   }
 
+  /// Mendapatkan ringkasan nutrisi hari ini
   Future<Map<String, double>> getTodayNutritionSummary() async {
-    debugPrint('🔵 getTodayNutritionSummary');
+    debugPrint('getTodayNutritionSummary');
     try {
       final today = DateTime.now();
       final startOfDay = DateTime(today.year, today.month, today.day);
@@ -750,39 +787,42 @@ class DatabaseManager {
         'total_fat': (result.first['total_fat'] as num?)?.toDouble() ?? 0,
       };
       
-      debugPrint('✅ Ringkasan nutrisi hari ini: $summary');
+      debugPrint('Ringkasan nutrisi hari ini: $summary');
       return summary;
       
     } catch (e) {
-      debugPrint('❌ getTodayNutritionSummary error: $e');
+      debugPrint('getTodayNutritionSummary error: $e');
       return {'total_calories': 0, 'total_protein': 0, 'total_carbs': 0, 'total_fat': 0};
     }
   }
 
+  /// Menghapus riwayat scan berdasarkan ID
   Future<void> deleteScanHistory(int id) async {
-    debugPrint('🔵 deleteScanHistory: $id');
+    debugPrint('deleteScanHistory: $id');
     try {
       final db = await database;
       await db.delete('scan_history', where: 'id = ?', whereArgs: [id]);
-      debugPrint('✅ Scan history dengan id=$id dihapus');
+      debugPrint('Scan history dengan id=$id dihapus');
     } catch (e) {
-      debugPrint('❌ deleteScanHistory error: $e');
+      debugPrint('deleteScanHistory error: $e');
     }
   }
 
+  /// Menghapus semua riwayat scan
   Future<void> deleteAllScanHistory() async {
-    debugPrint('🔵 deleteAllScanHistory');
+    debugPrint('deleteAllScanHistory');
     try {
       final db = await database;
       final count = await db.delete('scan_history');
-      debugPrint('✅ Semua scan history dihapus ($count record)');
+      debugPrint('Semua scan history dihapus ($count record)');
     } catch (e) {
-      debugPrint('❌ deleteAllScanHistory error: $e');
+      debugPrint('deleteAllScanHistory error: $e');
     }
   }
 
-  // ─── 4. Daily Progress ─────────────────────────────────────
+  // ==================== 4. DAILY PROGRESS ====================
 
+  /// Update progres harian user
   Future<void> updateDailyProgress({
     required String date,
     required int totalCalories,
@@ -790,7 +830,7 @@ class DatabaseManager {
     required double totalCarbs,
     required double totalFat,
   }) async {
-    debugPrint('🔵 updateDailyProgress: $date, calories=$totalCalories');
+    debugPrint('updateDailyProgress: $date, calories=$totalCalories');
     try {
       final db = await database;
       final now = DateTime.now().millisecondsSinceEpoch;
@@ -809,7 +849,7 @@ class DatabaseManager {
           where: 'date = ?',
           whereArgs: [date],
         );
-        debugPrint('✅ Daily progress diUPDATE untuk $date');
+        debugPrint('Daily progress diUPDATE untuk $date');
       } else {
         await db.insert('daily_progress', {
           'date': date,
@@ -819,15 +859,16 @@ class DatabaseManager {
           'total_fat': totalFat,
           'updated_at': now,
         });
-        debugPrint('✅ Daily progress diINSERT untuk $date');
+        debugPrint('Daily progress diINSERT untuk $date');
       }
     } catch (e) {
-      debugPrint('❌ updateDailyProgress error: $e');
+      debugPrint('updateDailyProgress error: $e');
     }
   }
 
+  /// Mendapatkan progres harian berdasarkan tanggal
   Future<Map<String, dynamic>?> getDailyProgress(String date) async {
-    debugPrint('🔵 getDailyProgress: $date');
+    debugPrint('getDailyProgress: $date');
     try {
       final db = await database;
       final results = await db.query(
@@ -837,23 +878,23 @@ class DatabaseManager {
       );
       
       if (results.isNotEmpty) {
-        debugPrint('✅ Daily progress ditemukan untuk $date');
+        debugPrint('Daily progress ditemukan untuk $date');
         return _safeRow(results.first);
       }
-      debugPrint('⚠️ Daily progress tidak ditemukan untuk $date');
+      debugPrint('Daily progress tidak ditemukan untuk $date');
       return null;
       
     } catch (e) {
-      debugPrint('❌ getDailyProgress error: $e');
+      debugPrint('getDailyProgress error: $e');
       return null;
     }
   }
 
-  // ─── 5. Missions ───────────────────────────────────────────
+  // ==================== 5. MISSIONS ====================
 
   /// Insert atau update master mission (dari JSON)
   Future<void> insertOrUpdateMission(Map<String, dynamic> mission) async {
-    debugPrint('🔵 insertOrUpdateMission: ${mission['id']}');
+    debugPrint('insertOrUpdateMission: ${mission['id']}');
     try {
       final db = await database;
       
@@ -875,15 +916,15 @@ class DatabaseManager {
         },
         conflictAlgorithm: ConflictAlgorithm.replace,
       );
-      debugPrint('✅ Mission ${mission['id']} tersimpan');
+      debugPrint('Mission ${mission['id']} tersimpan');
     } catch (e) {
-      debugPrint('❌ insertOrUpdateMission error: $e');
+      debugPrint('insertOrUpdateMission error: $e');
     }
   }
 
   /// Ambil semua mission yang aktif
   Future<List<Map<String, dynamic>>> getAllMissions() async {
-    debugPrint('🔵 getAllMissions');
+    debugPrint('getAllMissions');
     try {
       final db = await database;
       final results = await db.query(
@@ -891,17 +932,17 @@ class DatabaseManager {
         where: 'is_active = 1',
         orderBy: 'difficulty, name',
       );
-      debugPrint('✅ Mendapatkan ${results.length} missions');
+      debugPrint('Mendapatkan ${results.length} missions');
       return results;
     } catch (e) {
-      debugPrint('❌ getAllMissions error: $e');
+      debugPrint('getAllMissions error: $e');
       return [];
     }
   }
 
   /// Ambil mission berdasarkan ID
   Future<Map<String, dynamic>?> getMissionById(String missionId) async {
-    debugPrint('🔵 getMissionById: $missionId');
+    debugPrint('getMissionById: $missionId');
     try {
       final db = await database;
       final results = await db.query(
@@ -914,14 +955,14 @@ class DatabaseManager {
       }
       return null;
     } catch (e) {
-      debugPrint('❌ getMissionById error: $e');
+      debugPrint('getMissionById error: $e');
       return null;
     }
   }
 
   /// Ambil misi berdasarkan level difficulty
   Future<List<Map<String, dynamic>>> getMissionsByDifficulty(String difficulty) async {
-    debugPrint('🔵 getMissionsByDifficulty: $difficulty');
+    debugPrint('getMissionsByDifficulty: $difficulty');
     try {
       final db = await database;
       final results = await db.query(
@@ -929,17 +970,17 @@ class DatabaseManager {
         where: 'difficulty = ? AND is_active = 1',
         whereArgs: [difficulty],
       );
-      debugPrint('✅ Mendapatkan ${results.length} missions dengan difficulty $difficulty');
+      debugPrint('Mendapatkan ${results.length} missions dengan difficulty $difficulty');
       return results;
     } catch (e) {
-      debugPrint('❌ getMissionsByDifficulty error: $e');
+      debugPrint('getMissionsByDifficulty error: $e');
       return [];
     }
   }
 
   /// Ambil misi yang belum pernah diselesaikan dalam N hari terakhir
   Future<List<String>> getRecentCompletedMissionIds(int days) async {
-    debugPrint('🔵 getRecentCompletedMissionIds: $days hari');
+    debugPrint('getRecentCompletedMissionIds: $days hari');
     try {
       final db = await database;
       final cutoffDate = DateTime.now().subtract(Duration(days: days)).toIso8601String();
@@ -951,17 +992,17 @@ class DatabaseManager {
       );
       
       final missionIds = results.map((row) => row['mission_id'] as String).toList();
-      debugPrint('✅ Misi yang selesai dalam $days hari: $missionIds');
+      debugPrint('Misi yang selesai dalam $days hari: $missionIds');
       return missionIds;
     } catch (e) {
-      debugPrint('❌ getRecentCompletedMissionIds error: $e');
+      debugPrint('getRecentCompletedMissionIds error: $e');
       return [];
     }
   }
 
   /// Generate misi harian untuk user (reset setiap hari)
   Future<List<Map<String, dynamic>>> generateDailyMissions(String userId) async {
-    debugPrint('🔵 generateDailyMissions untuk user: $userId');
+    debugPrint('generateDailyMissions untuk user: $userId');
     try {
       final db = await database;
       final today = DateTime.now().toIso8601String().substring(0, 10);
@@ -975,11 +1016,11 @@ class DatabaseManager {
       
       // Dapatkan level user berdasarkan total scan
       final userLevel = await getUserLevel();
-      debugPrint('📊 User level: $userLevel');
+      debugPrint('User level: $userLevel');
       
       // Dapatkan misi yang baru diselesaikan (7 hari terakhir)
       final recentCompleted = await getRecentCompletedMissionIds(7);
-      debugPrint('📋 Recent completed missions: $recentCompleted');
+      debugPrint('Recent completed missions: $recentCompleted');
       
       String difficultyFilter;
       switch (userLevel) {
@@ -996,18 +1037,18 @@ class DatabaseManager {
       final difficultyList = difficultyFilter.split(',').map((d) => "'$d'").join(',');
       final excludeIds = recentCompleted.isEmpty ? "''" : recentCompleted.map((id) => "'$id'").join(',');
       
-      debugPrint('🎯 Difficulty filter: $difficultyList');
-      debugPrint('🎯 Exclude IDs: $excludeIds');
+      debugPrint('Difficulty filter: $difficultyList');
+      debugPrint('Exclude IDs: $excludeIds');
       
       final allMissions = await db.query(
         'missions',
         where: 'difficulty IN ($difficultyList) AND is_active = 1 AND id NOT IN ($excludeIds)',
       );
       
-      debugPrint('📋 Total misi yang memenuhi kriteria: ${allMissions.length}');
+      debugPrint('Total misi yang memenuhi kriteria: ${allMissions.length}');
       
       if (allMissions.isEmpty) {
-        debugPrint('⚠️ Tidak ada misi dengan filter, ambil semua misi aktif');
+        debugPrint('Tidak ada misi dengan filter, ambil semua misi aktif');
         final fallbackMissions = await db.query(
           'missions',
           where: 'is_active = 1',
@@ -1023,11 +1064,12 @@ class DatabaseManager {
       return await _assignMissionsToUser(db, userId, today, selectedMissions);
       
     } catch (e) {
-      debugPrint('❌ generateDailyMissions error: $e');
+      debugPrint('generateDailyMissions error: $e');
       return [];
     }
   }
 
+  /// Helper untuk assign misi ke user
   Future<List<Map<String, dynamic>>> _assignMissionsToUser(
     Database db,
     String userId,
@@ -1054,7 +1096,7 @@ class DatabaseManager {
       });
     }
     
-    debugPrint('✅ ${assignedMissions.length} misi harian digenerate');
+    debugPrint('${assignedMissions.length} misi harian digenerate');
     return assignedMissions;
   }
 
@@ -1068,43 +1110,39 @@ class DatabaseManager {
       if (totalScans < 30) return 'intermediate';
       return 'advanced';
     } catch (e) {
-      debugPrint('❌ getUserLevel error: $e');
+      debugPrint('getUserLevel error: $e');
       return 'beginner';
     }
-    }
+  }
     
   /// Dapatkan streak harian user berdasarkan PENYELESAIAN MISI (bukan scan)
   Future<int> getUserStreak() async {
-    debugPrint('🔵 getUserStreak (from completed missions)');
+    debugPrint('getUserStreak (from completed missions)');
     try {
       final completedMissions = await getCompletedMissionsHistory();
       if (completedMissions.isEmpty) {
-        debugPrint('📋 No completed missions yet, streak = 0');
+        debugPrint('No completed missions yet, streak = 0');
         return 0;
       }
       
-      debugPrint('📋 Total completed missions: ${completedMissions.length}');
+      debugPrint('Total completed missions: ${completedMissions.length}');
       
-      // Debug: cetak semua completed missions dengan tanggalnya
       for (var mission in completedMissions) {
         debugPrint('   - Mission: ${mission['mission_id']}, completed: ${mission['completed_date']}');
       }
       
-      // Kelompokkan berdasarkan tanggal (hanya ambil unique date)
       final Set<String> uniqueDates = {};
       for (var mission in completedMissions) {
         final completedDateStr = mission['completed_date'] as String;
-        // Ambil hanya bagian tanggal (YYYY-MM-DD)
         final dateOnly = completedDateStr.length >= 10 
             ? completedDateStr.substring(0, 10) 
             : completedDateStr;
         uniqueDates.add(dateOnly);
-        debugPrint('📅 Unique date added: $dateOnly');
+        debugPrint('Unique date added: $dateOnly');
       }
       
-      debugPrint('📅 Unique dates with completed missions: $uniqueDates');
+      debugPrint('Unique dates with completed missions: $uniqueDates');
       
-      // Hitung streak dari hari ini kebelakang
       int streak = 0;
       final today = DateTime.now();
       
@@ -1112,33 +1150,33 @@ class DatabaseManager {
         final checkDate = today.subtract(Duration(days: i));
         final dateKey = '${checkDate.year}-${checkDate.month.toString().padLeft(2, '0')}-${checkDate.day.toString().padLeft(2, '0')}';
         
-        debugPrint('🔍 Checking date: $dateKey, i=$i');
+        debugPrint('Checking date: $dateKey, i=$i');
         
         if (uniqueDates.contains(dateKey)) {
           streak++;
-          debugPrint('   ✅ Streak increased to $streak');
+          debugPrint('   Streak increased to $streak');
         } else {
           if (i == 0) {
-            debugPrint('   ⚠️ No mission completed today yet, streak = 0');
+            debugPrint('   No mission completed today yet, streak = 0');
             return 0;
           }
-          debugPrint('   ❌ Streak broken at day $i');
+          debugPrint('   Streak broken at day $i');
           break;
         }
       }
       
-      debugPrint('✅ Final user mission streak: $streak hari');
+      debugPrint('Final user mission streak: $streak hari');
       return streak;
       
     } catch (e) {
-      debugPrint('❌ getUserStreak error: $e');
+      debugPrint('getUserStreak error: $e');
       return 0;
     }
   }
 
   /// Ambil semua misi aktif user untuk hari ini
   Future<List<Map<String, dynamic>>> getTodayActiveMissions() async {
-    debugPrint('🔵 getTodayActiveMissions');
+    debugPrint('getTodayActiveMissions');
     try {
       final db = await database;
       final today = DateTime.now().toIso8601String().substring(0, 10);
@@ -1159,18 +1197,18 @@ class DatabaseManager {
           ump.id
       ''', [today]);
       
-      debugPrint('✅ Mendapatkan ${results.length} misi aktif hari ini');
+      debugPrint('Mendapatkan ${results.length} misi aktif hari ini');
       return results;
     } catch (e) {
-      debugPrint('❌ getTodayActiveMissions error: $e');
+      debugPrint('getTodayActiveMissions error: $e');
       return [];
     }
   }
 
   /// Update progress misi berdasarkan scan
   Future<void> updateMissionProgress(Map<String, dynamic> newScanData) async {
-    debugPrint('🔵🔵🔵 updateMissionProgress CALLED 🔵🔵🔵');
-    debugPrint('📊 Scan data: ${newScanData['indonesian_name']}');
+    debugPrint('updateMissionProgress CALLED');
+    debugPrint('Scan data: ${newScanData['indonesian_name']}');
     
     try {
       final db = await database;
@@ -1222,7 +1260,7 @@ class DatabaseManager {
         whereArgs: [today, 'in_progress'],
       );
       
-      debugPrint('📋 Active missions today: ${activeMissions.length}');
+      debugPrint('Active missions today: ${activeMissions.length}');
       
       for (final missionProgress in activeMissions) {
         final mission = await getMissionById(missionProgress['mission_id'] as String);
@@ -1350,7 +1388,7 @@ class DatabaseManager {
             break;
             
           default:
-            debugPrint('⚠️ Unknown target_field: $targetField');
+            debugPrint('Unknown target_field: $targetField');
             continue;
         }
         
@@ -1362,7 +1400,7 @@ class DatabaseManager {
             whereArgs: [missionProgress['id']],
           );
           
-          debugPrint('✅ Progress misi ${mission['name']}: $newValue/$targetCount');
+          debugPrint('Progress misi ${mission['name']}: $newValue/$targetCount');
           
           if (newValue >= targetCount) {
             await db.update(
@@ -1374,12 +1412,12 @@ class DatabaseManager {
               where: 'id = ?',
               whereArgs: [missionProgress['id']],
             );
-            debugPrint('🎉 Misi ${mission['name']} SELESAI!');
+            debugPrint('Misi ${mission['name']} SELESAI!');
           }
         }
       }
     } catch (e) {
-      debugPrint('❌ updateMissionProgress error: $e');
+      debugPrint('updateMissionProgress error: $e');
     }
   }
 
@@ -1418,6 +1456,7 @@ class DatabaseManager {
     return streak;
   }
 
+  /// Helper untuk check kondisi numerik
   bool _checkCondition(double value, String condition, double target) {
     switch (condition) {
       case '>=': return value >= target;
@@ -1429,6 +1468,7 @@ class DatabaseManager {
     }
   }
 
+  /// Helper untuk check kondisi string
   bool _checkStringCondition(String value, String condition, String target) {
     switch (condition) {
       case '==': return value == target;
@@ -1439,7 +1479,7 @@ class DatabaseManager {
 
   /// Klaim hadiah misi
   Future<bool> claimMissionReward(int missionProgressId) async {
-    debugPrint('🔵 claimMissionReward: id=$missionProgressId');
+    debugPrint('claimMissionReward: id=$missionProgressId');
     try {
       final db = await database;
       
@@ -1453,12 +1493,12 @@ class DatabaseManager {
       
       final progress = progressResult.first;
       if (progress['status'] != 'completed') {
-        debugPrint('⚠️ Misi belum selesai atau sudah diklaim');
+        debugPrint('Misi belum selesai atau sudah diklaim');
         return false;
       }
       
       if (progress['claimed_date'] != null) {
-        debugPrint('⚠️ Misi sudah pernah diklaim');
+        debugPrint('Misi sudah pernah diklaim');
         return false;
       }
       
@@ -1490,18 +1530,18 @@ class DatabaseManager {
         'points_earned': rewardPoints,
       });
       
-      debugPrint('✅ Hadiah misi diklaim: +$rewardPoints poin');
+      debugPrint('Hadiah misi diklaim: +$rewardPoints poin');
       return true;
       
     } catch (e) {
-      debugPrint('❌ claimMissionReward error: $e');
+      debugPrint('claimMissionReward error: $e');
       return false;
     }
   }
 
   /// Dapatkan statistik misi user
   Future<Map<String, dynamic>> getMissionStats() async {
-    debugPrint('🔵 getMissionStats');
+    debugPrint('getMissionStats');
     try {
       final db = await database;
       
@@ -1518,7 +1558,7 @@ class DatabaseManager {
         'badges': badges,
       };
     } catch (e) {
-      debugPrint('❌ getMissionStats error: $e');
+      debugPrint('getMissionStats error: $e');
       return {
         'total_missions_completed': 0,
         'total_points': 0,
@@ -1528,22 +1568,39 @@ class DatabaseManager {
     }
   }
 
-  // ─── DEBUG Methods ─────────────────────────────────────────
+  /// Ambil semua riwayat misi yang sudah selesai
+  Future<List<Map<String, dynamic>>> getCompletedMissionsHistory() async {
+    debugPrint('getCompletedMissionsHistory');
+    try {
+      final db = await database;
+      final results = await db.query(
+        'completed_missions_history',
+        orderBy: 'completed_date DESC',
+      );
+      debugPrint('Mendapatkan ${results.length} completed missions');
+      return results;
+    } catch (e) {
+      debugPrint('getCompletedMissionsHistory error: $e');
+      return [];
+    }
+  }
+
+  // ==================== DEBUG METHODS ====================
 
   /// DEBUG: Cek semua misi di database
   Future<void> debugPrintAllMissions() async {
-    debugPrint('🔍 ===== DEBUG ALL MISSIONS =====');
+    debugPrint('===== DEBUG ALL MISSIONS =====');
     final missions = await getAllMissions();
-    debugPrint('📋 Total missions in DB: ${missions.length}');
+    debugPrint('Total missions in DB: ${missions.length}');
     for (var mission in missions) {
       debugPrint('   - ${mission['id']}: ${mission['name']} (${mission['difficulty']}) - target_field: ${mission['target_field']}');
     }
-    debugPrint('🔍 ===== END DEBUG MISSIONS =====');
+    debugPrint('===== END DEBUG MISSIONS =====');
   }
 
   /// DEBUG: Cek misi aktif hari ini
   Future<void> debugPrintTodayMissions() async {
-    debugPrint('🔍 ===== DEBUG TODAY MISSIONS =====');
+    debugPrint('===== DEBUG TODAY MISSIONS =====');
     final today = DateTime.now().toIso8601String().substring(0, 10);
     final db = await database;
     final results = await db.query(
@@ -1551,37 +1608,30 @@ class DatabaseManager {
       where: 'assigned_date = ?',
       whereArgs: [today],
     );
-    debugPrint('📋 Total missions for today: ${results.length}');
+    debugPrint('Total missions for today: ${results.length}');
     for (var mission in results) {
       final missionDetail = await getMissionById(mission['mission_id'] as String);
       debugPrint('   - ${missionDetail?['name']}: status=${mission['status']}, current=${mission['current_value']}/${missionDetail?['target_count']}');
     }
-    debugPrint('🔍 ===== END DEBUG TODAY MISSIONS =====');
+    debugPrint('===== END DEBUG TODAY MISSIONS =====');
   }
 
-  // Di database_manager.dart, tambahkan method ini:
-
-  /// Ambil semua riwayat misi yang sudah selesai
-  Future<List<Map<String, dynamic>>> getCompletedMissionsHistory() async {
-    debugPrint('🔵 getCompletedMissionsHistory');
-    try {
-      final db = await database;
-      final results = await db.query(
-        'completed_missions_history',
-        orderBy: 'completed_date DESC',
-      );
-      debugPrint('✅ Mendapatkan ${results.length} completed missions');
-      return results;
-    } catch (e) {
-      debugPrint('❌ getCompletedMissionsHistory error: $e');
-      return [];
+  /// DEBUG: Cetak semua riwayat scan
+  Future<void> debugPrintAllScanHistory() async {
+    debugPrint('========== DEBUG SCAN HISTORY ==========');
+    final history = await getAllScanHistory();
+    for (int i = 0; i < history.length; i++) {
+      final item = history[i];
+      debugPrint('[$i] id=${item['id']}, name=${item['indonesian_name']}, calories=${item['calories']}, date=${DateTime.fromMillisecondsSinceEpoch(item['scanned_at'] as int)}');
     }
+    debugPrint('========== END DEBUG ==========');
   }
 
-  // ─── Utility & Maintenance ─────────────────────────────────
+  // ==================== UTILITY & MAINTENANCE ====================
 
+  /// Reset semua data (kecuali profil user)
   Future<void> resetAllData() async {
-    debugPrint('🔵 resetAllData - mereset semua data...');
+    debugPrint('resetAllData - mereset semua data...');
     try {
       final db = await database;
       await db.delete('corrections');
@@ -1605,14 +1655,15 @@ class DatabaseManager {
         );
       }
       
-      debugPrint('✅ Reset selesai');
+      debugPrint('Reset selesai');
     } catch (e) {
-      debugPrint('❌ resetAllData error: $e');
+      debugPrint('resetAllData error: $e');
     }
   }
 
+  /// Reset semua data (termasuk profil user dan missions)
   Future<void> resetAllDataComplete() async {
-    debugPrint('🔵 resetAllDataComplete - mereset SEMUA data...');
+    debugPrint('resetAllDataComplete - mereset SEMUA data...');
     try {
       final db = await database;
       await db.delete('corrections');
@@ -1624,61 +1675,55 @@ class DatabaseManager {
       await db.delete('completed_missions_history');
       await db.delete('user_badges');
       
-      debugPrint('✅ Complete reset selesai');
+      debugPrint('Complete reset selesai');
     } catch (e) {
-      debugPrint('❌ resetAllDataComplete error: $e');
+      debugPrint('resetAllDataComplete error: $e');
     }
   }
 
+  /// Menutup koneksi database
   Future<void> close() async {
-    debugPrint('🔵 close - menutup database...');
+    debugPrint('close - menutup database...');
     try {
       if (_database != null && _database!.isOpen) {
         await _database!.close();
         _database = null;
-        debugPrint('✅ Database ditutup');
+        debugPrint('Database ditutup');
       }
     } catch (e) {
-      debugPrint('⚠️ Error saat menutup database: $e');
+      debugPrint('Error saat menutup database: $e');
     }
   }
 
+  /// Cek apakah database terbuka
   Future<bool> isDatabaseOpen() async {
     final isOpen = _database != null && _database!.isOpen;
-    debugPrint('🔵 isDatabaseOpen: $isOpen');
+    debugPrint('isDatabaseOpen: $isOpen');
     return isOpen;
   }
 
-  Future<void> debugPrintAllScanHistory() async {
-    debugPrint('🔵 ========== DEBUG SCAN HISTORY ==========');
-    final history = await getAllScanHistory();
-    for (int i = 0; i < history.length; i++) {
-      final item = history[i];
-      debugPrint('📋 [$i] id=${item['id']}, name=${item['indonesian_name']}, calories=${item['calories']}, date=${DateTime.fromMillisecondsSinceEpoch(item['scanned_at'] as int)}');
-    }
-    debugPrint('🔵 ========== END DEBUG ==========');
-  }
-
+  /// Set status onboarding
   Future<void> setOnboardingCompleted(bool completed) async {
-    debugPrint('🔵 setOnboardingCompleted: $completed');
+    debugPrint('setOnboardingCompleted: $completed');
     try {
       final prefs = await SharedPreferences.getInstance();
       await prefs.setBool('onboarding_completed', completed);
-      debugPrint('✅ Onboarding status saved');
+      debugPrint('Onboarding status saved');
     } catch (e) {
-      debugPrint('❌ setOnboardingCompleted error: $e');
+      debugPrint('setOnboardingCompleted error: $e');
     }
   }
 
+  /// Cek status onboarding
   Future<bool> isOnboardingCompleted() async {
-    debugPrint('🔵 isOnboardingCompleted');
+    debugPrint('isOnboardingCompleted');
     try {
       final prefs = await SharedPreferences.getInstance();
       final completed = prefs.getBool('onboarding_completed') ?? false;
-      debugPrint('✅ Onboarding completed: $completed');
+      debugPrint('Onboarding completed: $completed');
       return completed;
     } catch (e) {
-      debugPrint('❌ isOnboardingCompleted error: $e');
+      debugPrint('isOnboardingCompleted error: $e');
       return false;
     }
   }
